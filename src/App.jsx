@@ -27,9 +27,16 @@ function Tab1({ modsDir }) {
 
   useEffect(() => {
     fetchMods();
-    const interval = setInterval(fetchMods, 2000); // vérifie toutes les 2 secondes
-    return () => clearInterval(interval); // cleanup au démontage
+    const interval = setInterval(fetchMods, 2000);
+    return () => clearInterval(interval);
   }, [modsDir]);
+
+  const handleRunFile = () => {
+    const path = "D://SteamLibrary//steamapps//common//Pizza Tower//PizzaTower.exe";
+    invoke("run_file", { path })
+      .then(() => console.log(`${path} exécuté !`))
+      .catch(console.error);
+  };
 
   return (
     <div>
@@ -38,16 +45,25 @@ function Tab1({ modsDir }) {
         <p className="text-gray-400 text-sm">Aucun mod trouvé dans {modsDir}</p>
       )}
       {!loading && mods.length > 0 && (
-        <div className="grid grid-cols-3 gap-2"> {/* ← petit gap pour esthétique */}
+        <div className="grid grid-cols-3 gap-2">
           {mods.map((mod) => (
             <ModCard key={mod} name={mod} />
           ))}
         </div>
       )}
+
+      {/* Bouton pour exécuter un fichier */}
+      <div className="mt-4">
+        <button
+          onClick={handleRunFile}
+          className="btn btn-primary"
+        >
+          Exec Test
+        </button>
+      </div>
     </div>
   );
 }
-
 
 function App() {
   const [activeTab, setActiveTab] = useState("tab1");

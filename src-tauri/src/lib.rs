@@ -1,4 +1,6 @@
 use std::fs;
+use std::process::Command;
+use tauri::command;
 
 #[tauri::command]
 fn get_mods_dir() -> Result<String, String> {
@@ -33,11 +35,19 @@ fn list_mods(mods_path: String) -> Result<Vec<String>, String> {
     Ok(folders)
 }
 
+#[tauri::command]
+fn run_file(path: String) -> Result<(), String> {
+    Command::new(path)
+        .spawn()
+        .map_err(|e: std::io::Error| e.to_string())?;
+    Ok(())
+}
+
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
     tauri::Builder::default()
         .plugin(tauri_plugin_opener::init())
-        .invoke_handler(tauri::generate_handler![get_mods_dir, list_mods])
+        .invoke_handler(tauri::generate_handler![get_mods_dir, list_mods, run_file])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");
 }
