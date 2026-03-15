@@ -43,11 +43,44 @@ fn run_file(path: String) -> Result<(), String> {
     Ok(())
 }
 
+#[tauri::command]
+fn add_item(path: String, is_dir: bool) -> Result<(), String> {
+    if is_dir {
+        std::fs::create_dir_all(&path).map_err(|e| e.to_string())?;
+    } else {
+        std::fs::File::create(&path).map_err(|e| e.to_string())?;
+    }
+    Ok(())
+}
+
+#[tauri::command]
+fn remove_item(path: String) -> Result<(), String> {
+    let metadata = std::fs::metadata(&path).map_err(|e| e.to_string())?;
+    if metadata.is_dir() {
+        std::fs::remove_dir_all(&path).map_err(|e| e.to_string())?;
+    } else {
+        std::fs::remove_file(&path).map_err(|e| e.to_string())?;
+    }
+    Ok(())
+}
+
+#[tauri::command]
+fn rename_item(old_path: String, new_path: String) -> Result<(), String> {
+    std::fs::rename(&old_path, &new_path).map_err(|e| e.to_string())?;
+    Ok(())
+}
+
+#[tauri::command]
+fn move_item(src_path: String, dest_path: String) -> Result<(), String> {
+    std::fs::rename(&src_path, &dest_path).map_err(|e| e.to_string())?;
+    Ok(())
+}
+
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
     tauri::Builder::default()
         .plugin(tauri_plugin_opener::init())
-        .invoke_handler(tauri::generate_handler![get_mods_dir, list_mods, run_file])
+        .invoke_handler(tauri::generate_handler![get_mods_dir, list_mods, run_file, add_item, remove_item, rename_item, move_item])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");
 }
