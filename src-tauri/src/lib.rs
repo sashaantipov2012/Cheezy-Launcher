@@ -2,22 +2,14 @@ use std::fs;
 use std::process::Command;
 
 #[tauri::command]
-fn get_mods_dir() -> Result<String, String> {
-    let exe_path = std::env::current_exe()
-        .map_err(|e| e.to_string())?;
-
-    let exe_dir = exe_path
-        .parent()
-        .ok_or("Impossible de trouver le dossier parent")?;
-
-    let mods_dir = exe_dir.join("mods");
-
-    if !mods_dir.exists() {
-        fs::create_dir_all(&mods_dir)
-            .map_err(|e| e.to_string())?;
+fn get_main_dir(folder_name: String) -> Result<String, String> {
+    let exe_path = std::env::current_exe().map_err(|e| e.to_string())?;
+    let exe_dir = exe_path.parent().ok_or("Impossible de trouver le dossier parent")?;
+    let target_dir = exe_dir.join(&folder_name);
+    if !target_dir.exists() {
+        fs::create_dir_all(&target_dir).map_err(|e| e.to_string())?;
     }
-
-    Ok(mods_dir.to_string_lossy().to_string())
+    Ok(target_dir.to_string_lossy().to_string())
 }
 
 #[tauri::command]
@@ -103,11 +95,48 @@ fn apply_xdelta_patch(source: String, patch: String, output: String) -> Result<(
     }
 }
 
+#[tauri::command]
+fn apply_overwrite(overwrite_path: String, target_path: String) -> Result<(), String> {
+    let src = std::path::Path::new(&overwrite_path);
+    let dst = std::path::Path::new(&target_path);
+
+    for entry in walkdir::WalkDir::new(src) {
+        let entry = entry.map_err(|e| e.to_string())?;
+        let rel = entry.path().strip_prefix(src).map_err(|e| e.to_string())?;
+        let dest = dst.join(rel);
+
+        if entry.path().is_dir() {
+            fs::create_dir_all(&dest).map_err(|e| e.to_string())?;
+        } else {
+            fs::copy(entry.path(), &dest).map_err(|e| e.to_string())?;
+        }
+    }
+    Ok(())
+}
+
+#[tauri::command]
+fn remove_overwrite(overwrite_path: String, target_path: String) -> Result<(), String> {
+    let src = std::path::Path::new(&overwrite_path);
+    let dst = std::path::Path::new(&target_path);
+
+    for entry in walkdir::WalkDir::new(src) {
+        let entry = entry.map_err(|e| e.to_string())?;
+        if entry.path().is_file() {
+            let rel = entry.path().strip_prefix(src).map_err(|e| e.to_string())?;
+            let target_file = dst.join(rel);
+            if target_file.exists() {
+                fs::remove_file(target_file).map_err(|e| e.to_string())?;
+            }
+        }
+    }
+    Ok(())
+}
+
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
     tauri::Builder::default()
         .plugin(tauri_plugin_opener::init())
-        .invoke_handler(tauri::generate_handler![get_mods_dir, list_mods, run_file, add_item, remove_item, rename_item, move_item, apply_xdelta_patch])
+        .invoke_handler(tauri::generate_handler![get_main_dir, list_mods, run_file, add_item, remove_item, rename_item, move_item, apply_xdelta_patch, apply_overwrite, remove_overwrite])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");
 }

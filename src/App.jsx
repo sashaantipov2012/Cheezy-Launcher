@@ -2,6 +2,8 @@ import { useState, useEffect } from "react";
 import { invoke } from "@tauri-apps/api/core";
 import "./App.css";
 
+const GAME_DIR = "D:\\SteamLibrary\\steamapps\\common\\Pizza Tower";
+
 function ModCard({ name }) {
   return (
     <div className="rounded-xl border border-gray-600 hover:border-gray-400 transition-colors shadow-md">
@@ -13,7 +15,43 @@ function ModCard({ name }) {
   );
 }
 
-function Tab1({ modsDir }) {
+function OverwriteCheckbox({ overwiteDir }) {
+  const [enabled, setEnabled] = useState(false);
+  const [loading, setLoading] = useState(false);
+
+  const handleToggle = async () => {
+    setLoading(true);
+    try {
+      if (!enabled) {
+        await invoke("apply_overwrite", { overwritePath: overwiteDir, targetPath: GAME_DIR });
+      } else {
+        await invoke("remove_overwrite", { overwritePath: overwiteDir, targetPath: GAME_DIR });
+      }
+      setEnabled(!enabled);
+    } catch (e) {
+      console.error(e);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  return (
+    <label className="flex items-center gap-2 cursor-pointer select-none">
+      <input
+        type="checkbox"
+        className="checkbox checkbox-primary checkbox-sm"
+        checked={enabled}
+        disabled={loading || !overwiteDir}
+        onChange={handleToggle}
+      />
+      <span className="text-sm text-gray-300">
+        {loading ? "..." : enabled ? "Overwrite actif" : "Overwrite"}
+      </span>
+    </label>
+  );
+}
+
+function Tab1({ modsDir, overwiteDir }) {
   const [mods, setMods] = useState([]);
   const [loading, setLoading] = useState(true);
 
@@ -32,7 +70,7 @@ function Tab1({ modsDir }) {
   }, [modsDir]);
 
   const handleRunFile = () => {
-    const path = "D://SteamLibrary//steamapps//common//Pizza Tower//PizzaTower.exe";
+    const path = `${GAME_DIR}//PizzaTower.exe`;
     invoke("run_file", { path })
       .then(() => console.log(`${path} exécuté !`))
       .catch(console.error);
@@ -51,28 +89,22 @@ function Tab1({ modsDir }) {
           ))}
         </div>
       )}
-      <div className="mt-4">
-        <button
-          onClick={handleRunFile}
-          className="btn btn-primary"
-        >
+      <div className="mt-4 flex items-center gap-3">
+        <button onClick={handleRunFile} className="btn btn-primary">
           Exec Test
         </button>
+        <button
+          className="btn btn-secondary"
+          onClick={() =>
+            invoke("apply_xdelta_patch", { source: "", patch: "", output: "" })
+              .then(() => alert("Patch appliqué !"))
+              .catch(console.error)
+          }
+        >
+          Patch Test
+        </button>
+        <OverwriteCheckbox overwiteDir={overwiteDir} />
       </div>
-      <button
-  className="btn btn-primary mt-2"
-  onClick={() =>
-    invoke("apply_xdelta_patch", {
-      source: "",
-      patch: "",
-      output: ""
-    })
-      .then(() => alert("Patch appliqué !"))
-      .catch(console.error)
-  }
->
-  Patch Test
-</button>
     </div>
   );
 }
@@ -80,44 +112,32 @@ function Tab1({ modsDir }) {
 function App() {
   const [activeTab, setActiveTab] = useState("tab1");
   const [modsDir, setModsDir] = useState(null);
+  const [overwiteDir, setOverwiteDir] = useState(null);
 
   useEffect(() => {
-    invoke("get_mods_dir")
+    invoke("get_main_dir", { folderName: "mods" })
       .then((path) => setModsDir(path))
+      .catch(console.error);
+
+    invoke("get_main_dir", { folderName: "overwrite" })
+      .then((path) => setOverwiteDir(path))
       .catch(console.error);
   }, []);
 
   return (
-    <div className="">
-      <div className="tabs mb-4">
-        <a
-          className={`tab tab-lifted ${activeTab === "tab1" ? "tab-active" : ""}`}
-          onClick={() => setActiveTab("tab1")}
-        >
-          Tab 1
-        </a>
-        <a
-          className={`tab tab-lifted ${activeTab === "tab2" ? "tab-active" : ""}`}
-          onClick={() => setActiveTab("tab2")}
-        >
-          Tab 2
-        </a>
-        <a
-          className={`tab tab-lifted ${activeTab === "tab3" ? "tab-active" : ""}`}
-          onClick={() => setActiveTab("tab3")}
-        >
-          Tab 3
-        </a>
-      </div>
-
-      {/* Contenu des tabs */}
-      <div className="p-4 bg-gray-800 rounded-lg min-h-[150px]">
-        {activeTab === "tab1" && <Tab1 modsDir={modsDir} />}
-        {activeTab === "tab2" && <p>Voici le contenu du deuxième onglet.</p>}
-        {activeTab === "tab3" && <p>Tu es maintenant sur le troisième onglet.</p>}
-      </div>
+  <div>
+    <div role="tablist" className="tabs tabs-lifted mb-4">
+      <a role="tab" className={`tab ${activeTab === "tab1" ? "tab-active" : ""}`} onClick={() => setActiveTab("tab1")}>Tab 1</a>
+      <a role="tab" className={`tab ${activeTab === "tab2" ? "tab-active" : ""}`} onClick={() => setActiveTab("tab2")}>Tab 2</a>
+      <a role="tab" className={`tab ${activeTab === "tab3" ? "tab-active" : ""}`} onClick={() => setActiveTab("tab3")}>Tab 3</a>
     </div>
-  );
+    <div className="p-4 bg-gray-800 rounded-lg min-h-[150px]">
+      {activeTab === "tab1" && <Tab1 modsDir={modsDir} overwiteDir={overwiteDir} />}
+      {activeTab === "tab2" && <p>Voici le contenu du deuxième onglet.</p>}
+      {activeTab === "tab3" && <p>Tu es maintenant sur le troisième onglet.</p>}
+    </div>
+  </div>
+);
 }
 
 export default App;
