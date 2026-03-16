@@ -122,11 +122,13 @@ function SettingsTab() {
   const [saving, setSaving] = useState(false);
 
   useEffect(() => {
-    invoke("get_settings")
-      .then((data) => setSettings(data))
-      .catch(console.error)
-      .finally(() => setLoading(false));
-  }, []);
+  invoke("get_settings")
+    .then((data) => {
+      setSettings(data);
+    })
+    .catch(console.error)
+    .finally(() => setLoading(false));
+}, []);
 
   const applyTheme = (theme) => {
     document.documentElement.setAttribute("data-theme", theme);
@@ -146,6 +148,7 @@ function SettingsTab() {
         path: `${exeDir}//settings.json`,
         content: JSON.stringify(settings, null, 2)
         });
+      applyTheme(settings.theme);
       alert("Settings saved !");
     } catch (e) {
       console.error(e);
