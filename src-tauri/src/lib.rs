@@ -1,5 +1,7 @@
 use std::fs;
 use std::process::Command;
+use tauri_plugin_single_instance::init as single_instance;
+use tauri::Manager;
 
 #[tauri::command]
 fn get_main_dir(folder_name: String) -> Result<String, String> {
@@ -135,6 +137,11 @@ fn remove_overwrite(overwrite_path: String, target_path: String) -> Result<(), S
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
     tauri::Builder::default()
+        .plugin(single_instance(|app, _argv, _cwd| {
+            if let Some(window) = app.get_webview_window("main") {
+                window.set_focus().unwrap();
+            }
+        }))
         .plugin(tauri_plugin_opener::init())
         .invoke_handler(tauri::generate_handler![get_main_dir, list_mods, run_file, add_item, remove_item, rename_item, move_item, apply_xdelta_patch, apply_overwrite, remove_overwrite])
         .run(tauri::generate_context!())
