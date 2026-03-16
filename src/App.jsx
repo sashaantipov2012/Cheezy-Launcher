@@ -4,6 +4,11 @@ import "./App.css";
 
 const GAME_DIR = "D:\\SteamLibrary\\steamapps\\common\\Pizza Tower";
 
+const themes = [
+  "light",
+  "dark"
+];
+
 function ModCard({ name }) {
   return (
     <div className="rounded-xl border border-gray-600 hover:border-gray-400 transition-colors shadow-md">
@@ -44,7 +49,7 @@ function OverwriteCheckbox({ overwiteDir }) {
         disabled={loading || !overwiteDir}
         onChange={handleToggle}
       />
-      <span className="text-sm text-gray-300">
+      <span className="text-sm">
         {loading ? "..." : enabled ? "Overwrite actif" : "Overwrite"}
       </span>
     </label>
@@ -95,9 +100,9 @@ function Tab1({ modsDir, overwiteDir }) {
         <OverwriteCheckbox overwiteDir={overwiteDir} />
       </div>
       <div className="mt-4">
-        {loading && <p className="text-gray-400 text-sm">Loading...</p>}
+        {loading && <p className="text-sm">Loading...</p>}
       {!loading && mods.length === 0 && (
-        <p className="text-gray-400 text-sm">No mods found in{modsDir}</p>
+        <p className="text-sm">No mods found in{modsDir}</p>
       )}
       {!loading && mods.length > 0 && (
         <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-3">
@@ -107,6 +112,74 @@ function Tab1({ modsDir, overwiteDir }) {
         </div>
       )}
       </div>
+    </div>
+  );
+}
+
+function SettingsTab() {
+  const [settings, setSettings] = useState({ theme: "" });
+  const [loading, setLoading] = useState(true);
+  const [saving, setSaving] = useState(false);
+
+  useEffect(() => {
+    invoke("get_settings")
+      .then((data) => setSettings(data))
+      .catch(console.error)
+      .finally(() => setLoading(false));
+  }, []);
+
+  const applyTheme = (theme) => {
+    document.documentElement.setAttribute("data-theme", theme);
+  };
+
+  const handleChange = (e) => {
+    const value = e.target.value;
+    setSettings((prev) => ({ ...prev, [e.target.name]: e.target.value }));
+    applyTheme(value);
+  };
+
+  const handleSave = async () => {
+    setSaving(true);
+    try {
+      const exeDir = await invoke("get_main_dir", { folderName: "" }); // renvoie exe_dir
+      await invoke("edit_item", {
+        path: `${exeDir}//settings.json`,
+        content: JSON.stringify(settings, null, 2)
+        });
+      alert("Settings saved !");
+    } catch (e) {
+      console.error(e);
+      alert("Error saving settings");
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  if (loading) return <p className="text-primary-content">Loading settings...</p>;
+
+  return (
+    <div className="flex flex-col gap-4">
+      <div className="flex flex-col">
+        <label className="mb-1">Theme</label>
+        <select
+          name="theme"
+          value={settings.theme}
+          onChange={handleChange}
+          className="select select-bordered select-sm"
+        >
+          {themes.map((t) => (
+            <option key={t} value={t}>{t}</option>
+          ))}
+        </select>
+      </div>
+
+      <button
+        onClick={handleSave}
+        disabled={saving}
+        className="btn btn-primary w-max"
+      >
+        {saving ? "Saving..." : "Save Settings"}
+      </button>
     </div>
   );
 }
@@ -128,15 +201,19 @@ function App() {
 
   return (
   <div>
-    <div role="tablist" className="tabs tabs-lifted mb-4">
+    <div role="tablist" className="tabs tabs-lifted mb-4 flex justify-between">
+      <div className="flex gap-1">
       <a role="tab" className={`tab ${activeTab === "tab1" ? "tab-active" : ""}`} onClick={() => setActiveTab("tab1")}>Tab 1</a>
       <a role="tab" className={`tab ${activeTab === "tab2" ? "tab-active" : ""}`} onClick={() => setActiveTab("tab2")}>Tab 2</a>
       <a role="tab" className={`tab ${activeTab === "tab3" ? "tab-active" : ""}`} onClick={() => setActiveTab("tab3")}>Tab 3</a>
+      </div>
+      <a role="tab" className={`tab ${activeTab === "settings" ? "tab-active" : ""}`} onClick={() => setActiveTab("settings")}>Settings</a>
     </div>
-    <div className="p-4 bg-gray-800 rounded-lg min-h-[150px]">
+    <div className="p-4 bg-base-200 rounded-lg min-h-[150px]">
       {activeTab === "tab1" && <Tab1 modsDir={modsDir} overwiteDir={overwiteDir} />}
       {activeTab === "tab2" && <p>2nd (will be GMLoader suuport)</p>}
       {activeTab === "tab3" && <p>3rd (will be maybe Gamebanana search like PO)</p>}
+      {activeTab === "settings" && <SettingsTab />}
     </div>
   </div>
 );

@@ -2,6 +2,33 @@ use std::fs;
 use std::process::Command;
 use tauri_plugin_single_instance::init as single_instance;
 use tauri::Manager;
+use serde::{Deserialize, Serialize};
+use std::path::PathBuf;
+
+#[derive(Serialize, Deserialize)]
+struct Settings {
+    theme: String,
+}
+
+#[tauri::command]
+fn get_settings() -> Result<Settings, String> {
+    let exe_path = std::env::current_exe().map_err(|e| e.to_string())?;
+    let exe_dir = exe_path.parent().ok_or("No exe dir")?;
+
+    let config_path: PathBuf = exe_dir.join("settings.json");
+
+    if !config_path.exists() {
+        let default_settings = Settings {
+            theme: "light".to_string(),
+        };
+        fs::write(&config_path, serde_json::to_string_pretty(&default_settings).unwrap())
+            .map_err(|e| e.to_string())?;
+    }
+    let content = fs::read_to_string(&config_path).map_err(|e| e.to_string())?;
+    let settings: Settings = serde_json::from_str(&content).map_err(|e| e.to_string())?;
+
+    Ok(settings)
+}
 
 #[tauri::command]
 fn get_main_dir(folder_name: String) -> Result<String, String> {
@@ -60,6 +87,19 @@ fn remove_item(path: String) -> Result<(), String> {
 #[tauri::command]
 fn rename_item(old_path: String, new_path: String) -> Result<(), String> {
     std::fs::rename(&old_path, &new_path).map_err(|e| e.to_string())?;
+    Ok(())
+}
+
+#[tauri::command]
+fn edit_item(path: String, content: String) -> Result<(), String> {
+    use std::io::Write;
+
+    let mut file = std::fs::File::create(&path)
+        .map_err(|e| e.to_string())?;
+
+    file.write_all(content.as_bytes())
+        .map_err(|e| e.to_string())?;
+
     Ok(())
 }
 
@@ -143,7 +183,7 @@ pub fn run() {
             }
         }))
         .plugin(tauri_plugin_opener::init())
-        .invoke_handler(tauri::generate_handler![get_main_dir, list_mods, run_file, add_item, remove_item, rename_item, move_item, apply_xdelta_patch, apply_overwrite, remove_overwrite])
+        .invoke_handler(tauri::generate_handler![get_settings, get_main_dir, list_mods, run_file, add_item, remove_item, rename_item, edit_item, move_item, apply_xdelta_patch, apply_overwrite, remove_overwrite])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");
 }
