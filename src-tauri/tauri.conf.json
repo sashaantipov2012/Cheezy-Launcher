@@ -14,7 +14,9 @@
       {
         "title": "Cheezy Launcher",
         "width": 950,
-        "height": 540
+        "height": 540,
+        "minWidth": 640,
+        "minHeight": 480
       }
     ],
     "security": {

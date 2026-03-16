@@ -78,17 +78,6 @@ function Tab1({ modsDir, overwiteDir }) {
 
   return (
     <div>
-      {loading && <p className="text-gray-400 text-sm">Chargement...</p>}
-      {!loading && mods.length === 0 && (
-        <p className="text-gray-400 text-sm">Aucun mod trouvé dans {modsDir}</p>
-      )}
-      {!loading && mods.length > 0 && (
-        <div className="grid grid-cols-3 gap-2">
-          {mods.map((mod) => (
-            <ModCard key={mod} name={mod} />
-          ))}
-        </div>
-      )}
       <div className="mt-4 flex items-center gap-3">
         <button onClick={handleRunFile} className="btn btn-primary">
           Exec Test
@@ -104,6 +93,19 @@ function Tab1({ modsDir, overwiteDir }) {
           Patch Test
         </button>
         <OverwriteCheckbox overwiteDir={overwiteDir} />
+      </div>
+      <div className="mt-4">
+        {loading && <p className="text-gray-400 text-sm">Loading...</p>}
+      {!loading && mods.length === 0 && (
+        <p className="text-gray-400 text-sm">No mods found in{modsDir}</p>
+      )}
+      {!loading && mods.length > 0 && (
+        <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-3">
+          {mods.map((mod) => (
+            <ModCard key={mod} name={mod} />
+          ))}
+        </div>
+      )}
       </div>
     </div>
   );
@@ -133,8 +135,8 @@ function App() {
     </div>
     <div className="p-4 bg-gray-800 rounded-lg min-h-[150px]">
       {activeTab === "tab1" && <Tab1 modsDir={modsDir} overwiteDir={overwiteDir} />}
-      {activeTab === "tab2" && <p>Voici le contenu du deuxième onglet.</p>}
-      {activeTab === "tab3" && <p>Tu es maintenant sur le troisième onglet.</p>}
+      {activeTab === "tab2" && <p>2nd (will be GMLoader suuport)</p>}
+      {activeTab === "tab3" && <p>3rd (will be maybe Gamebanana search like PO)</p>}
     </div>
   </div>
 );
