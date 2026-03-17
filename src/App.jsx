@@ -1,6 +1,8 @@
 import { useState, useEffect } from "react";
 import { invoke } from "@tauri-apps/api/core";
 import "./App.css";
+import AnsiToHtml from "ansi-to-html";
+import chalk from 'chalk';
 
 const GAME_DIR = "D:\\SteamLibrary\\steamapps\\common\\Pizza Tower";
 
@@ -85,11 +87,11 @@ function Tab1({ modsDir, overwiteDir, addLog, logs }) {
 
   invoke("run_file", { path })
     .then(() => {
-      addLog("Game launched");
+      addLog(chalk.cyan("Game launched"));
     })
     .catch((e) => {
       console.error(e);
-      addLog("Error launching game");
+      addLog(chalk.red("Error launching game"));
     });
 };
 
@@ -199,13 +201,25 @@ function SettingsTab() {
   );
 }
 
-function LogPanel({ logs }) {
+function LogPanel({ logs, onClear }) {
+  const convert = new AnsiToHtml();
+
   return (
-    <div className="mt-4 p-3 bg-base-300 rounded-lg max-h-40 overflow-y-auto text-xs font-mono">
-      {logs.length === 0 && <p>No logs yet...</p>}
-      {logs.map((log, i) => (
-        <div key={i}>{log}</div>
-      ))}
+    <div className="mt-4 p-3 bg-base-300 rounded-lg h-40 overflow-y-auto text-xs font-mono flex flex-col">
+      <div className="flex justify-between items-center mb-2">
+        <span className="font-bold">Logs</span>
+        <button onClick={onClear} className="btn btn-sm btn-outline" title="Clear logs">🗑️</button>
+      </div>
+      <div className="flex-1 overflow-auto">
+        {logs.length === 0 && <p>No logs yet...</p>}
+        {logs.map((log, i) => (
+          <div
+            key={i}
+            className="break-words"
+            dangerouslySetInnerHTML={{ __html: convert.toHtml(log) }}
+          />
+        ))}
+      </div>
     </div>
   );
 }
@@ -242,7 +256,7 @@ function App() {
   </div>
   <div className="flex-1 p-4 bg-base-200 rounded-lg">
     
-    <div className="flex-1 overflow-auto" style={{ height: "calc(100vh - 300px)" }}>
+    <div className="flex-1 overflow-auto" style={{ height: `calc(100vh - 100px)` }}>
       {activeTab === "tab1" && <Tab1 modsDir={modsDir} overwiteDir={overwiteDir} addLog={addLog} logs={logs} />}
       {activeTab === "tab2" && <p>2nd (will be GMLoader suuport)</p>}
       {activeTab === "tab3" && <p>3rd (will be maybe Gamebanana search like PO)</p>}
@@ -251,7 +265,7 @@ function App() {
 
     {(activeTab === "tab1" || activeTab === "tab2") && (
       <div className="mt-auto">
-        <LogPanel logs={logs} />
+        <LogPanel logs={logs} onClear={() => setLogs([])}/>
       </div>
     )}
 
