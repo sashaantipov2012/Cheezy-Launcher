@@ -11,12 +11,49 @@ const themes = [
   "dark"
 ];
 
-function ModCard({ name }) {
+function ModCard({ modPath, modName }) {
+  const [modData, setModData] = useState(null);
+
+  useEffect(() => {
+    const loadMod = async () => {
+      try {
+        const content = await invoke("read_item", { path: `${modPath}/mod.json` });
+        const data = JSON.parse(content); // parse JSON si présent
+        setModData(data);
+      } catch (e) {
+        console.warn(`No mod.json for ${modName}`, e);
+        setModData(null); // fallback si pas de mod.json
+      }
+    };
+
+    loadMod();
+  }, [modPath, modName]);
+
+  const title = modData?.title || modName;
+  const preview = modData?.preview || null;
+  const submitter = modData?.submitter || "Unknown";
+  const cat = modData?.cat || "Unknown";
+  const description = modData?.description || "";
+
   return (
-    <div className="rounded-xl border border-gray-600 hover:border-gray-400 transition-colors shadow-md">
-      <div className="card-body flex flex-col justify-center items-center p-4">
-        <span className="text-3xl mb-2">📦</span>
-        <h2 className="card-title text-center truncate text-sm">{name}</h2>
+    <div className="rounded border border-base-300 hover:border-primary transition-colors shadow-md overflow-hidden">
+      {preview && (
+        <img src={preview} alt={title} className="w-full h-32 object-cover" />
+      )}
+      <div className="card-body flex flex-col justify-center items-center p-4 text-center">
+        <h2 className="card-title text-sm font-bold truncate">{title}</h2>
+        <p className="text-xs text-gray-400 truncate">{submitter} • {cat}</p>
+        {description && <p className="text-xs mt-1 line-clamp-2">{description}</p>}
+        {modData?.homepage && (
+          <a
+            href={modData.homepage}
+            target="_blank"
+            rel="noopener noreferrer"
+            className="text-blue-500 text-xs mt-1 hover:underline"
+          >
+            {modData.homepage}
+          </a>
+        )}
       </div>
     </div>
   );
@@ -121,7 +158,7 @@ function Tab1({ modsDir, overwiteDir, addLog, logs }) {
       {!loading && mods.length > 0 && (
         <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-3">
           {mods.map((mod) => (
-            <ModCard key={mod} name={mod} />
+            <ModCard modName={mod} modPath={`${modsDir}/${mod}`} />
           ))}
         </div>
       )}
@@ -139,6 +176,7 @@ function SettingsTab() {
   invoke("get_settings")
     .then((data) => {
       setSettings(data);
+      applyTheme(data.theme)
     })
     .catch(console.error)
     .finally(() => setLoading(false));
@@ -229,6 +267,7 @@ function App() {
   const [modsDir, setModsDir] = useState(null);
   const [overwiteDir, setOverwiteDir] = useState(null);
   const [logs, setLogs] = useState([]);
+  const [settings, setSettings] = useState({ theme: "light" });
   const addLog = (message) => {
     const time = new Date().toLocaleTimeString();
     setLogs((prev) => [`[${time}] ${message}`, ...prev]);
@@ -242,12 +281,33 @@ function App() {
     invoke("get_main_dir", { folderName: "overwrite" })
       .then((path) => setOverwiteDir(path))
       .catch(console.error);
+
+    invoke("get_settings")
+      .then((data) => setSettings(data))
+      .catch(console.error);
   }, []);
+
+  useEffect(() => {
+    if (settings.theme) {
+      document.documentElement.setAttribute("data-theme", settings.theme);
+    }
+  }, [settings.theme]);
+
+  useEffect(() => {
+  const handleContextMenu = (e) => {
+    e.preventDefault(); // bloque le menu par défaut
+  };
+  window.addEventListener("contextmenu", handleContextMenu);
+
+  return () => {
+    window.removeEventListener("contextmenu", handleContextMenu);
+  };
+}, []);
 
   return (
   <div>
-  <div role="tablist" className="tabs tabs-lifted flex justify-between">
-    <div className="flex gap-1">
+  <div role="tablist" className="tabs tabs-border flex justify-between">
+    <div className="flex gap-1 tabs-border">
       <a role="tab" className={`tab ${activeTab === "tab1" ? "tab-active" : ""}`} onClick={() => setActiveTab("tab1")}>Tab 1</a>
       <a role="tab" className={`tab ${activeTab === "tab2" ? "tab-active" : ""}`} onClick={() => setActiveTab("tab2")}>Tab 2</a>
       <a role="tab" className={`tab ${activeTab === "tab3" ? "tab-active" : ""}`} onClick={() => setActiveTab("tab3")}>Tab 3</a>
@@ -256,7 +316,7 @@ function App() {
   </div>
   <div className="flex-1 p-4 bg-base-200 rounded-lg">
     
-    <div className="flex-1 overflow-auto" style={{ height: `calc(100vh - ${(activeTab === "tab1" || activeTab === "tab2") ? "300px" : "150px"})` }}>
+    <div className="flex-1 overflow-auto" style={{ height: `calc(100vh - ${(activeTab === "tab1" || activeTab === "tab2") ? "270px" : "90px"})` }}>
       {activeTab === "tab1" && <Tab1 modsDir={modsDir} overwiteDir={overwiteDir} addLog={addLog} logs={logs} />}
       {activeTab === "tab2" && <p>2nd (will be GMLoader suuport)</p>}
       {activeTab === "tab3" && <p>3rd (will be maybe Gamebanana search like PO)</p>}
