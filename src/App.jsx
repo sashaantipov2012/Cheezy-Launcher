@@ -256,7 +256,7 @@ function App() {
   </div>
   <div className="flex-1 p-4 bg-base-200 rounded-lg">
     
-    <div className="flex-1 overflow-auto" style={{ height: `calc(100vh - 100px)` }}>
+    <div className="flex-1 overflow-auto" style={{ height: `calc(100vh - ${(activeTab === "tab1" || activeTab === "tab2") ? "300px" : "150px"})` }}>
       {activeTab === "tab1" && <Tab1 modsDir={modsDir} overwiteDir={overwiteDir} addLog={addLog} logs={logs} />}
       {activeTab === "tab2" && <p>2nd (will be GMLoader suuport)</p>}
       {activeTab === "tab3" && <p>3rd (will be maybe Gamebanana search like PO)</p>}
