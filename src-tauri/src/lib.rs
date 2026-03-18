@@ -152,20 +152,31 @@ fn get_xdelta_path() -> Result<PathBuf, String> {
 }
 
 #[tauri::command]
-fn apply_xdelta_patch(source: String, patch: String, output: String) -> Result<(), String> {
+fn apply_xdelta_patch(source: String, patch: String, output: String, overwrite: bool) -> Result<(), String> {
     let xdelta = get_xdelta_path()?;
     let source_path = normalize_path(&source);
     let patch_path = normalize_path(&patch);
     let output_path = normalize_path(&output);
     println!("Source: {:?}", source_path);
-    let status = std::process::Command::new(&xdelta)
-        .arg("-d")
-        .arg("-s")
+    println!("Output: {:?}", output_path);
+    if !source_path.exists() {
+        return Err("Fichier source introuvable".into());
+    }
+    if !patch_path.exists() {
+        return Err("Patch introuvable".into());
+    }
+    let mut cmd = Command::new(&xdelta);
+    cmd.arg("-d");
+    if overwrite {
+        cmd.arg("-f");
+    }
+    cmd.arg("-s")
         .arg(&source_path)
         .arg(&patch_path)
-        .arg(&output_path)
+        .arg(&output_path);
+    let status = cmd
         .status()
-        .map_err(|e| format!("Erreur lancement: {}", e))?;
+        .map_err(|e| format!("Erreur lancement Xdelta: {}", e))?;
     if status.success() {
         Ok(())
     } else {
