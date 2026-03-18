@@ -3,7 +3,7 @@ use std::process::Command;
 use tauri_plugin_single_instance::init as single_instance;
 use tauri::Manager;
 use serde::{Deserialize, Serialize};
-use std::path::PathBuf;
+use std::path::{Path, PathBuf};
 
 #[derive(Serialize, Deserialize)]
 struct Settings {
@@ -136,31 +136,43 @@ fn open_item(path: String) -> Result<(), String> {
     Ok(())
 }
 
-fn get_xdelta_path() -> String {
+fn normalize_path(path: &str) -> std::path::PathBuf {
+    let fixed = path.replace("/", "\\");
+    std::path::PathBuf::from(fixed)
+}
+
+fn get_xdelta_path() -> Result<PathBuf, String> {
     let exe_dir = std::env::current_exe()
-        .unwrap()
+        .map_err(|e| e.to_string())?
         .parent()
-        .unwrap()
+        .ok_or("Impossible to find the exe folder")?
         .to_path_buf();
 
-    let xdelta = exe_dir.join("deps").join("xdelta3.exe");
-
-    xdelta.to_string_lossy().to_string()
+    Ok(exe_dir.join("deps").join("xdelta3.exe"))
 }
 
 #[tauri::command]
 fn apply_xdelta_patch(source: String, patch: String, output: String) -> Result<(), String> {
-    let xdelta_path = get_xdelta_path();
-
-    let status = std::process::Command::new(xdelta_path)
-        .args(&["-d", "-s", &source, &patch, &output])
+    let xdelta = get_xdelta_path()?;
+    let source_path = normalize_path(&source);
+    let patch_path = normalize_path(&patch);
+    let output_path = normalize_path(&output);
+    println!("Source: {:?}", source_path);
+    let status = std::process::Command::new(&xdelta)
+        .arg("-d")
+        .arg("-s")
+        .arg(&source_path)
+        .arg(&patch_path)
+        .arg(&output_path)
         .status()
-        .map_err(|e| e.to_string())?;
-
+        .map_err(|e| format!("Erreur lancement: {}", e))?;
     if status.success() {
         Ok(())
     } else {
-        Err(format!("Error Xdelta, code: {}", status.code().unwrap_or(-1)))
+        Err(format!(
+            "Erreur Xdelta, code: {}",
+            status.code().unwrap_or(-1)
+        ))
     }
 }
 
