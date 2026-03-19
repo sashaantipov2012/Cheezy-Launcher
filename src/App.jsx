@@ -1,5 +1,6 @@
 import { useState, useEffect } from "react";
 import { invoke } from "@tauri-apps/api/core";
+import { listen } from "@tauri-apps/api/event";
 import "./App.css";
 import AnsiToHtml from "ansi-to-html";
 import chalk from 'chalk';
@@ -62,47 +63,14 @@ function ModCard({ modPath, modName, selected = false, onSelect }) {
     </div>
   );
 }
-function OverwriteCheckbox({ overwiteDir }) {
-  const [enabled, setEnabled] = useState(false);
-  const [loading, setLoading] = useState(false);
-
-  const handleToggle = async () => {
-    setLoading(true);
-    try {
-      if (!enabled) {
-        await invoke("apply_overwrite", { overwritePath: overwiteDir, targetPath: GAME_DIR });
-      } else {
-        await invoke("remove_overwrite", { overwritePath: overwiteDir, targetPath: GAME_DIR });
-      }
-      setEnabled(!enabled);
-    } catch (e) {
-      console.error(e);
-    } finally {
-      setLoading(false);
-    }
-  };
-
-  return (
-    <label className="flex items-center gap-2 cursor-pointer select-none">
-      <input
-        type="checkbox"
-        className="checkbox checkbox-primary checkbox-sm"
-        checked={enabled}
-        disabled={loading || !overwiteDir}
-        onChange={handleToggle}
-      />
-      <span className="text-sm">
-        {loading ? "..." : enabled ? "Overwrite actif" : "Overwrite"}
-      </span>
-    </label>
-  );
-}
 
 function Tab1({ modsDir, overwiteDir, addLog, logs }) {
   const [mods, setMods] = useState([]);
   const [loading, setLoading] = useState(true);
   const [searchTerm, setSearchTerm] = useState("");
-  const [selectedMod, setSelectedMod] = useState(null); // <- état pour la sélection
+  const [selectedMod, setSelectedMod] = useState(null); 
+  const [operationRunning, setOperationRunning] = useState(false);
+  
 
   const fetchMods = () => {
     if (!modsDir) return;
@@ -121,27 +89,70 @@ function Tab1({ modsDir, overwiteDir, addLog, logs }) {
   const filteredMods = mods.filter(mod =>
     mod.toLowerCase().includes(searchTerm.toLowerCase())
   );
+  useEffect(() => {
+    const unlisten = listen("prepare-log", (event) => {
+        addLog(event.payload);
+    });
+    return () => { unlisten.then(f => f()); };
+}, []);
 
   useEffect(() => {
     fetchMods();
     const interval = setInterval(fetchMods, 2000);
     return () => clearInterval(interval);
   }, [modsDir]);
-  const handleRunFile = () => {
-    const path = `${GAME_DIR}//PizzaTower.exe`;
+  const handleRunFile = async () => {
+  if (operationRunning) return;
+  setOperationRunning(true);
+  addLog(chalk.yellow("Preparing overwrite..."));
 
-    invoke("run_file", { path })
-      .then(() => {
-        addLog(chalk.cyan("Game launched"));
-      })
-      .catch((e) => {
-        console.error(e);
-        addLog(chalk.red("Error launching game"));
-      });
-    };
+  try {
+    const vfsRoot = await invoke("get_main_dir", { folderName: "vfs_root" });
+
+    // 1. Préparer l'overwrite (vider + copier/patcher les mods sélectionnés)
+    await invoke("prepare_overwrite", {
+      mods: selectedMod ? [selectedMod] : [],
+      modsPath: modsDir,
+      overwritePath: overwiteDir,
+      gameDir: GAME_DIR,
+    });
+    addLog(chalk.yellow("Mounting VFS..."));
+
+    // 2. Monter le VFS
+    await invoke("mount_vfs", {
+      gameDir: GAME_DIR,
+      overwritePath: overwiteDir,
+      vfsRoot,
+    });
+    addLog(chalk.cyan("Launching game..."));
+
+    // 3. Lancer le jeu depuis le VFS (non-bloquant côté Tauri)
+    await invoke("launch_game", {
+      vfsRoot,
+      exeName: "PizzaTower.exe",
+    });
+    addLog(chalk.green("Game is running"));
+
+    // 4. Surveiller la fin du jeu pour démonter le VFS
+    const poll = setInterval(async () => {
+      const running = await invoke("is_operation_running");
+      if (!running) {
+        clearInterval(poll);
+        addLog(chalk.yellow("Game closed, unmounting VFS..."));
+        await invoke("unmount_vfs", { vfsRoot });
+        addLog(chalk.green("VFS unmounted"));
+        setOperationRunning(false);
+      }
+    }, 2000);
+
+  } catch (e) {
+    addLog(chalk.red(`Error: ${e}`));
+    setOperationRunning(false);
+  }
+};
   const handleSelectMod = (modName) => {
-    setSelectedMod(modName === selectedMod ? null : modName); // toggle
-  };
+  setSelectedMod(prev => prev === modName ? null : modName); // toggle
+};
 
   return (
     <div className="flex flex-col h-full">
@@ -162,28 +173,9 @@ function Tab1({ modsDir, overwiteDir, addLog, logs }) {
       </div>
 
       <div className="flex gap-3 mb-3 flex-shrink-0">
-        <button onClick={handleRunFile} className="btn btn-primary">
-          Exec Test
+        <button onClick={handleRunFile} disabled={operationRunning} className={`btn btn-primary ${operationRunning ? "btn-disabled" : ""}`}>
+          {operationRunning ? "Running..." : "Launch"}
         </button>
-        <button
-          className="btn btn-secondary"
-          onClick={() =>
-            invoke("apply_xdelta_patch", { source: "", patch: "", output: "" })
-              .then(() => alert("Patch appliqué !"))
-              .catch(console.error)
-          }
-        >
-          Patch Test
-        </button>
-        <button
-          className="btn btn-secondary"
-          onClick={() =>
-            invoke("open_item", { path: GAME_DIR})
-          }
-        >
-          Open Folder Test
-        </button>
-        <OverwriteCheckbox overwiteDir={overwiteDir} />
       </div>
       <div className="flex-1 overflow-auto">
         {loading && <p className="text-sm">Loading...</p>}
