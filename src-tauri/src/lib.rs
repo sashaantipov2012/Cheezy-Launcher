@@ -20,27 +20,45 @@ struct Settings {
     theme: String,
     #[serde(default)]
     launch_args: Vec<String>,
+    #[serde(default)]
+    game_dir: String,
+    #[serde(default)]
+    game_data_dir: String,
 }
-
 #[tauri::command]
 fn get_settings() -> Result<Settings, String> {
-  let exe_dir = exe_dir()?;
-  let config_path = exe_dir.join("settings.json");
-  if !config_path.exists() {
-    let default = Settings {
-    theme: "light".to_string(),
-    launch_args: Vec::new(),
-    };
-    fs::write(
-      &config_path,
-      serde_json::to_string_pretty(&default).unwrap(),
-    )
-    .map_err(|e| e.to_string())?;
-  }
-  let content = fs::read_to_string(&config_path).map_err(|e| e.to_string())?;
-  serde_json::from_str(&content).map_err(|e| e.to_string())
-}
+    let exe_dir = exe_dir()?;
+    let config_path = exe_dir.join("settings.json");
+    if !config_path.exists() {
+        let game_dir = steamlocate::SteamDir::locate()
+            .ok()
+            .and_then(|s| s.find_app(2231450).ok().flatten())
+            .map(|(app, lib)| {
+                lib.path()
+                    .join("steamapps")
+                    .join("common")
+                    .join(&app.install_dir)
+                    .to_string_lossy()
+                    .to_string()
+            })
+            .unwrap_or_default();
 
+        let game_data_dir = std::env::var("APPDATA")
+            .map(|p| Path::new(&p).join("PizzaTower_GM2").to_string_lossy().to_string())
+            .unwrap_or_default();
+
+        let default = Settings {
+            theme: "light".to_string(),
+            launch_args: Vec::new(),
+            game_dir,
+            game_data_dir,
+        };
+        fs::write(&config_path, serde_json::to_string_pretty(&default).unwrap())
+            .map_err(|e| e.to_string())?;
+    }
+    let content = fs::read_to_string(&config_path).map_err(|e| e.to_string())?;
+    serde_json::from_str(&content).map_err(|e| e.to_string())
+}
 fn exe_dir() -> Result<PathBuf, String> {
   let exe = std::env::current_exe().map_err(|e| e.to_string())?;
   exe
@@ -660,6 +678,43 @@ async fn fetch_file(url: String) -> Result<Vec<u8>, String> {
     Ok(bytes.to_vec())
 }
 
+#[tauri::command]
+fn detect_game_dir() -> Result<String, String> {
+    // Pizza Tower App ID sur Steam
+    const PIZZA_TOWER_APP_ID: u32 = 2231450;
+
+    let steam_dir = steamlocate::SteamDir::locate()
+        .map_err(|e| e.to_string())?;
+
+    let (app, lib) = steam_dir
+        .find_app(PIZZA_TOWER_APP_ID)
+        .map_err(|e| e.to_string())?
+        .ok_or_else(|| "Pizza Tower not found in Steam libraries".to_string())?;
+
+    let game_path = lib.path()
+        .join("steamapps")
+        .join("common")
+        .join(&app.install_dir);
+
+    Ok(game_path.to_string_lossy().to_string())
+}
+
+#[tauri::command]
+fn detect_game_data_dir() -> Result<String, String> {
+    #[cfg(windows)]
+    {
+        if let Ok(appdata) = std::env::var("APPDATA") {
+            let path = Path::new(&appdata).join("PizzaTower_GM2");
+            if path.exists() {
+                return Ok(path.to_string_lossy().to_string());
+            }
+            // Retourner le path même s'il n'existe pas encore
+            return Ok(path.to_string_lossy().to_string());
+        }
+    }
+    Err("Could not find AppData".to_string())
+}
+
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
   let shared_state: SharedState = Arc::new(Mutex::new(AppState::default()));
@@ -672,6 +727,7 @@ pub fn run() {
       }
     }))
     .plugin(tauri_plugin_opener::init())
+    .plugin(tauri_plugin_dialog::init())
     .invoke_handler(tauri::generate_handler![
       get_settings,
       get_main_dir,
@@ -692,6 +748,8 @@ pub fn run() {
       force_stop_game,
       download_mod,
       fetch_file,
+      detect_game_dir,
+      detect_game_data_dir,
     ])
     .run(tauri::generate_context!())
     .expect("error while running tauri application");
