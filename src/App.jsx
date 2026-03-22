@@ -449,16 +449,10 @@ function BrowseMods({ modsDir, addLog }) {
 
   const [sortBy, setSortBy] = useState("_tsDateUpdated,DESC");
 
-  const SORT_OPTIONS = [
-    { label: "Latest", value: "_tsDateUpdated,DESC" },
-    { label: "Most Downloaded", value: "_nDownloadCount,DESC" },
-    { label: "Most Liked", value: "_nLikeCount,DESC" },
-    { label: "Featured", value: "_bIsFeatured,DESC" },
-    { label: "Oldest", value: "_tsDateUpdated,ASC" },
-  ];
-
   const GAME_ID = 7692;
   const PER_PAGE = 15;
+  const CYOP_IDS = [25679, 22962, 25680];
+  const GMLOADER_ID = 36921;
 
   useEffect(() => {
     const fetchCats = async () => {
@@ -476,48 +470,88 @@ function BrowseMods({ modsDir, addLog }) {
     fetchCats();
   }, []);
 
+  // Normalise un mod v6 + v11 en objet unifié
+  const normalizeMod = (modV6, modV11 = {}) => {
+    const id = modV6._idRow || modV6._sProfileUrl?.split("/").pop();
+    return {
+      _idRow: id,
+      name: modV6._sName,
+      owner: modV6._aSubmitter?._sName,
+      avi: modV6._aSubmitter?._sAvatarUrl,
+      upic: modV6._aSubmitter?._sUpicUrl,
+      preview: modV11._aPreviewMedia?._aImages?.[0]
+        ? `${modV11._aPreviewMedia._aImages[0]._sBaseUrl}/${modV11._aPreviewMedia._aImages[0]._sFile220 ?? modV11._aPreviewMedia._aImages[0]._sFile}`
+        : Array.isArray(modV6._aPreviewMedia) && modV6._aPreviewMedia[0]
+          ? `${modV6._aPreviewMedia[0]._sBaseUrl}/${modV6._aPreviewMedia[0]._sFile220 ?? modV6._aPreviewMedia[0]._sFile}`
+          : null,
+      cat: modV6._aRootCategory?._sName,
+      caticon: modV6._aRootCategory?._sIconUrl,
+      catId: modV6._aRootCategory?._idRow,
+      url: modV6._sProfileUrl || modV11._sProfileUrl,
+      lastupdate: modV6._tsDateUpdated || modV11._tsDateModified,
+      files: modV6._aFiles || {},
+      description: modV6._sDescription || "",
+    };
+  };
+
   const fetchMods = async (search = "", p = 1, catId = selectedCat, sort = sortBy) => {
     setLoading(true);
     try {
-        let url = `https://gamebanana.com/apiv6/Mod/ByGame?_aGameRowIds[]=${GAME_ID}`;
-        url += `&_csvProperties=_sName,_idRow,_sProfileUrl,_aSubmitter,_tsDateUpdated,_aPreviewMedia,_sDescription,_aRootCategory`;
-        url += `&_nPerpage=${PER_PAGE}&_nPage=${p}&_sOrderBy=${sort}`;
-        if (catId) url += `&_aRootCategoryRowId=${catId}`;
-        if (search) url += `&_sName=*${encodeURIComponent(search)}*`;
+      if (search) {
+        let urlV6 = `https://gamebanana.com/apiv6/Mod/ByName?_sName=*${encodeURIComponent(search)}*&_idGameRow=${GAME_ID}`;
+        urlV6 += `&_csvProperties=_sName,_idRow,_sProfileUrl,_aSubmitter,_tsDateUpdated,_aPreviewMedia,_sDescription,_aRootCategory,_aFiles`;
+        urlV6 += `&_nPerpage=${PER_PAGE}&_nPage=${p}`;
 
-        const countUrl = `https://gamebanana.com/apiv6/Mod/ByGame?_aGameRowIds[]=${GAME_ID}&_nPerpage=1&_nPage=1${catId ? `&_aRootCategoryRowId=${catId}` : ""}${search ? `&_sName=*${encodeURIComponent(search)}*` : ""}`;
+        const countUrl = `https://gamebanana.com/apiv11/Mod/Index?_nPage=1&_nPerpage=1&_aFilters%5BGeneric_Game%5D=${GAME_ID}&_sName=${encodeURIComponent(search)}`;
 
-        const [res, countRes] = await Promise.all([fetch(url), fetch(countUrl)]);
-        const records = await res.json();
+        const [resV6, countRes] = await Promise.all([fetch(urlV6), fetch(countUrl)]);
+        const recordsV6 = await resV6.json();
         const countData = await countRes.json();
 
+        // Enrich avec v11 en parallèle
+        const ids = (recordsV6 || []).map(mod => mod._idRow || mod._sProfileUrl?.split("/").pop());
+        const v11Map = {};
+        if (ids.length > 0) {
+          const v11Results = await Promise.all(
+            ids.map(id => fetch(`https://gamebanana.com/apiv11/Mod/${id}?_csvProperties=_aPreviewMedia,_sProfileUrl,_tsDateModified`).then(r => r.json()))
+          );
+          ids.forEach((id, i) => { v11Map[id] = v11Results[i]; });
+        }
+
+        setTotalCount(Math.ceil((countData._aMetadata?._nRecordCount || 0) / PER_PAGE));
+        setMods((recordsV6 || []).map(mod => normalizeMod(mod, v11Map[mod._idRow || mod._sProfileUrl?.split("/").pop()] || {})));
+
+      } else {
+        let urlV6 = `https://gamebanana.com/apiv6/Mod/ByGame?_aGameRowIds[]=${GAME_ID}`;
+        urlV6 += `&_csvProperties=_sName,_idRow,_sProfileUrl,_aSubmitter,_tsDateUpdated,_aPreviewMedia,_aRootCategory`;
+        urlV6 += `&_nPerpage=${PER_PAGE}&_nPage=${p}&_sOrderBy=${sort}`;
+        if (catId) urlV6 += `&_aRootCategoryRowId=${catId}`;
+
+        let urlV11 = `https://gamebanana.com/apiv11/Mod/Index?_nPage=${p}&_nPerpage=${PER_PAGE}&_aFilters%5BGeneric_Game%5D=${GAME_ID}`;
+        if (catId) urlV11 += `&_aFilters%5BGeneric_Category%5D=${catId}`;
+
+        const countUrl = `https://gamebanana.com/apiv6/Mod/ByGame?_aGameRowIds[]=${GAME_ID}&_nPerpage=1&_nPage=1${catId ? `&_aRootCategoryRowId=${catId}` : ""}`;
+
+        const [resV6, resV11, countRes] = await Promise.all([fetch(urlV6), fetch(urlV11), fetch(countUrl)]);
+        const recordsV6 = await resV6.json();
+        const recordsV11 = await resV11.json();
+        const countData = await countRes.json();
+
+        const v11Map = {};
+        for (const mod of (recordsV11._aRecords || [])) { v11Map[mod._idRow] = mod; }
+
         setTotalCount(Math.ceil((countData?._aMetadata?._nRecordCount || 0) / PER_PAGE));
-        setMods((records || []).map((mod) => ({
-            _idRow: mod._idRow || mod._sProfileUrl?.split("/").pop(),
-            name: mod._sName,
-            owner: mod._aSubmitter?._sName,
-            avi: mod._aSubmitter?._sAvatarUrl,
-            upic: mod._aSubmitter?._sUpicUrl,
-            preview: Array.isArray(mod._aPreviewMedia)
-                ? mod._aPreviewMedia[0]
-                    ? `${mod._aPreviewMedia[0]._sBaseUrl}/${mod._aPreviewMedia[0]._sFile220 ?? mod._aPreviewMedia[0]._sFile}`
-                    : null
-                : mod._aPreviewMedia?._aImages?.[0]
-                    ? `${mod._aPreviewMedia._aImages[0]._sBaseUrl}/${mod._aPreviewMedia._aImages[0]._sFile220 ?? mod._aPreviewMedia._aImages[0]._sFile}`
-                    : null,
-            cat: mod._aRootCategory?._sName,
-            caticon: mod._aRootCategory?._sIconUrl,
-            catId: mod._aRootCategory?._idRow,
-            url: mod._sProfileUrl,
-            lastupdate: mod._tsDateUpdated || mod._tsDateModified,
-            description: mod._sDescription || "",
-        })));
+        setMods((recordsV6 || []).map(mod => {
+          const id = mod._idRow || mod._sProfileUrl?.split("/").pop();
+          return normalizeMod(mod, v11Map[id] || {});
+        }));
+      }
     } catch (e) {
-        addLog(`Error fetching mods: ${e}`);
+      addLog(`Error fetching mods: ${e}`);
     } finally {
-        setLoading(false);
+      setLoading(false);
     }
-};
+  };
 
   useEffect(() => { fetchMods(searchTerm, page); }, [page]);
 
@@ -530,123 +564,108 @@ function BrowseMods({ modsDir, addLog }) {
     fetchMods("", 1, catId);
   };
 
-  const CYOP_IDS = [25679, 22962, 25680];
-const GMLOADER_ID = 36921;
-
-const handleDownload = async (mod) => {
+  const handleDownload = async (mod) => {
     if (!window.confirm(`Would you like to install "${mod.name}"?`)) return;
     setDownloading(mod._idRow);
     try {
-        const res = await fetch(
-            `https://gamebanana.com/apiv11/Mod/${mod._idRow}?_csvProperties=_aFiles,_sDescription,_aRootCategory`
-        );
-        const data = await res.json();
-        const files = data._aFiles || {};
-        const description = data._sDescription || "";
-        const rootCatId = data._aRootCategory?._idRow;
-        const rootCatParentId = data._aRootCategory?._idParentCategoryRow;
+      const res = await fetch(
+        `https://gamebanana.com/apiv11/Mod/${mod._idRow}?_csvProperties=_aFiles,_sDescription,_aRootCategory`
+      );
+      const data = await res.json();
+      const files = data._aFiles || {};
+      const description = data._sDescription || "";
+      const rootCatId = data._aRootCategory?._idRow;
+      const rootCatParentId = data._aRootCategory?._idParentCategoryRow;
 
-        const isCYOP = CYOP_IDS.includes(rootCatId) || CYOP_IDS.includes(rootCatParentId);
-        const isGMLoader = rootCatId === GMLOADER_ID;
+      const isCYOP = CYOP_IDS.includes(rootCatId) || CYOP_IDS.includes(rootCatParentId);
+      const isGMLoader = rootCatId === GMLOADER_ID;
 
-        if (!files || Object.keys(files).length === 0) {
-            addLog(`No files for ${mod.name}`);
-            return;
-        }
+      if (!files || Object.keys(files).length === 0) {
+        addLog(`No files for ${mod.name}`);
+        return;
+      }
 
-        const file = Object.values(files)[0];
+      const file = Object.values(files)[0];
 
-        let targetModsPath = modsDir;
-        let writeModJson = true;
+      let targetModsPath = modsDir;
+      let writeModJson = true;
 
-        if (isCYOP) {
-            const settingsData = await invoke("get_settings");
-            targetModsPath = `${settingsData.game_data_dir}\\towers`;
-            writeModJson = false;
-        } else if (isGMLoader) {
-            targetModsPath = modsDir.replace(/[/\\]mods$/, "\\mods_GML");
-            writeModJson = false;
-        }
+      if (isCYOP) {
+        const settingsData = await invoke("get_settings");
+        targetModsPath = `${settingsData.game_data_dir}\\towers`;
+        writeModJson = false;
+      } else if (isGMLoader) {
+        targetModsPath = modsDir.replace(/[/\\]mods$/, "\\mods_GML");
+        writeModJson = false;
+      }
 
-        addLog(`Downloading ${file._sFile}...`);
+      addLog(`Downloading ${file._sFile}...`);
 
-        const bytes = await invoke("fetch_file", { url: file._sDownloadUrl });
-        await invoke("download_mod", {
-            modName: mod.name,
-            modsPath: targetModsPath,
-            fileBytes: bytes,
-            fileName: file._sFile,
+      const bytes = await invoke("fetch_file", { url: file._sDownloadUrl });
+      await invoke("download_mod", {
+        modName: mod.name,
+        modsPath: targetModsPath,
+        fileBytes: bytes,
+        fileName: file._sFile,
+      });
+
+      if (isCYOP) await invoke("flatten_mod_dir", { modPath: `${targetModsPath}\\${mod.name}` });
+
+      if (writeModJson) {
+        const modJson = {
+          title: mod.name,
+          preview: mod.preview || "",
+          submitter: mod.owner,
+          avi: mod.avi,
+          upic: mod.upic,
+          caticon: mod.caticon,
+          cat: mod.cat,
+          description,
+          filedescription: file._sDescription || "",
+          homepage: mod.url,
+          lastupdate: new Date(mod.lastupdate * 1000).toISOString(),
+        };
+        await invoke("edit_item", {
+          path: `${targetModsPath}\\${mod.name}\\mod.json`,
+          content: JSON.stringify(modJson, null, 2),
         });
+      }
 
-        if (isCYOP) await invoke("flatten_mod_dir", { modPath: `${targetModsPath}\\${mod.name}` });
-
-        if (writeModJson) {
-            const modJson = {
-                title: mod.name,
-                preview: mod.preview || "",
-                submitter: mod.owner,
-                avi: mod.avi,
-                upic: mod.upic,
-                caticon: mod.caticon,
-                cat: mod.cat,
-                description: description,
-                filedescription: file._sDescription || "",
-                homepage: mod.url,
-                lastupdate: new Date(mod.lastupdate * 1000).toISOString(),
-            };
-            await invoke("edit_item", {
-                path: `${targetModsPath}\\${mod.name}\\mod.json`,
-                content: JSON.stringify(modJson, null, 2),
-            });
-        }
-
-        addLog(`✓ Downloaded: ${mod.name}`);
-        window.alert(`"${mod.name}" has been correctly installed!`);
+      addLog(`✓ Downloaded: ${mod.name}`);
+      window.alert(`"${mod.name}" has been correctly installed!`);
     } catch (e) {
-        addLog(`Error downloading ${mod.name}: ${e}`);
+      addLog(`Error downloading ${mod.name}: ${e}`);
     } finally {
-        setDownloading(null);
+      setDownloading(null);
     }
-};
-
-  const totalPages = totalCount;
+  };
 
   return (
     <div className="flex flex-col h-full gap-3">
-      {/* Search bar */}
       <div className="flex gap-2 flex-shrink-0">
-  <input
-    type="text"
-    placeholder="Search mods on GameBanana..."
-    value={searchTerm}
-    onChange={(e) => setSearchTerm(e.target.value)}
-    onKeyDown={(e) => e.key === "Enter" && handleSearch()}
-    className="input input-bordered input-sm flex-1"
-  />
-  <select
-    value={sortBy}
-    onChange={(e) => {
-        setSortBy(e.target.value);
-        setPage(1);
-        fetchMods(searchTerm, 1, selectedCat, e.target.value);
-    }}
-    className="select select-bordered select-sm w-auto"
->
-    <option value="_tsDateUpdated,DESC">Latest</option>
-    <option value="_nDownloadCount,DESC">Most Downloaded</option>
-    <option value="_nLikeCount,DESC">Most Liked</option>
-    <option value="_bIsFeatured,DESC">Featured</option>
-    <option value="_tsDateUpdated,ASC">Oldest</option>
-</select>
-  <CatDropdown
-    categories={categories}
-    selectedCat={selectedCat}
-    onSelect={handleCatSelect}
-  />
-  <button onClick={handleSearch} className="btn btn-sm btn-primary">
-    Search
-  </button>
-</div>
+        <input
+          type="text"
+          placeholder="Search mods on GameBanana..."
+          value={searchTerm}
+          onChange={(e) => setSearchTerm(e.target.value)}
+          onKeyDown={(e) => e.key === "Enter" && handleSearch()}
+          className="input input-bordered input-sm flex-1"
+        />
+        <CatDropdown categories={categories} selectedCat={selectedCat} onSelect={handleCatSelect} />
+        <select
+          value={sortBy}
+          disabled={!!searchTerm}
+          onChange={(e) => { setSortBy(e.target.value); setPage(1); fetchMods("", 1, selectedCat, e.target.value); }}
+          className="select select-bordered select-sm w-auto disabled:opacity-50"
+        >
+          <option value="_tsDateUpdated,DESC">Latest</option>
+          <option value="_nDownloadCount,DESC">Most Downloaded</option>
+          <option value="_nLikeCount,DESC">Most Liked</option>
+          <option value="_bIsFeatured,DESC">Featured</option>
+          <option value="_tsDateUpdated,ASC">Oldest</option>
+        </select>
+        <button onClick={handleSearch} className="btn btn-sm btn-primary">Search</button>
+      </div>
 
       <div className="flex-1 overflow-auto">
         {loading && <p className="text-sm">Loading...</p>}
@@ -654,10 +673,7 @@ const handleDownload = async (mod) => {
         {!loading && mods.length > 0 && (
           <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-3">
             {mods.map((mod) => (
-              <div
-                key={mod._idRow}
-                className="rounded border border-base-300 shadow-md overflow-hidden flex flex-col"
-              >
+              <div key={mod._idRow} className="rounded border border-base-300 shadow-md overflow-hidden flex flex-col">
                 {mod.preview && (
                   <img
                     src={mod.preview}
@@ -670,17 +686,10 @@ const handleDownload = async (mod) => {
                   <h2 className="text-sm font-bold truncate">{mod.name}</h2>
                   <p className="text-xs text-gray-400 truncate">{mod.owner} • {mod.cat}</p>
                   <div className="mt-auto flex gap-2 pt-2">
-                    
-                    <a  href={mod.url}
-                      target="_blank"
-                      rel="noopener noreferrer"
-                      className="btn btn-xs btn-outline flex-1"
-                    >
-                      View
-                    </a>
+                    <a href={mod.url} target="_blank" rel="noopener noreferrer" className="btn btn-xs btn-outline flex-1">View</a>
                     <button
                       onClick={() => handleDownload(mod)}
-                      disabled={downloading === mod._idRow}
+                      disabled={downloading !== null}
                       className="btn btn-xs btn-primary flex-1"
                     >
                       {downloading === mod._idRow ? "..." : "Install"}
@@ -693,23 +702,11 @@ const handleDownload = async (mod) => {
         )}
       </div>
 
-      {totalPages > 1 && (
+      {totalCount > 1 && (
         <div className="join flex justify-center flex-shrink-0">
-          <button
-            className="join-item btn"
-            disabled={page === 1}
-            onClick={() => setPage(p => p - 1)}
-          >
-            ←
-          </button>
-          <span className="join-item btn btn-active">Page {page} / {totalPages}</span>
-          <button
-            className="join-item btn"
-            disabled={page >= totalPages}
-            onClick={() => setPage(p => p + 1)}
-          >
-            →
-          </button>
+          <button className="join-item btn" disabled={page === 1} onClick={() => setPage(p => p - 1)}>←</button>
+          <span className="join-item btn btn-active">Page {page} / {totalCount}</span>
+          <button className="join-item btn" disabled={page >= totalCount} onClick={() => setPage(p => p + 1)}>→</button>
         </div>
       )}
     </div>
