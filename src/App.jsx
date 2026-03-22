@@ -497,61 +497,71 @@ function BrowseMods({ modsDir, addLog }) {
   const fetchMods = async (search = "", p = 1, catId = selectedCat, sort = sortBy) => {
     setLoading(true);
     try {
-      if (search) {
-        let urlV6 = `https://gamebanana.com/apiv6/Mod/ByName?_sName=*${encodeURIComponent(search)}*&_idGameRow=${GAME_ID}`;
-        urlV6 += `&_csvProperties=_sName,_idRow,_sProfileUrl,_aSubmitter,_tsDateUpdated,_aPreviewMedia,_sDescription,_aRootCategory,_aFiles`;
-        urlV6 += `&_nPerpage=${PER_PAGE}&_nPage=${p}`;
+        if (search) {
+            let urlV6 = `https://gamebanana.com/apiv6/Mod/ByName?_sName=*${encodeURIComponent(search)}*&_idGameRow=${GAME_ID}`;
+            urlV6 += `&_csvProperties=_sName,_idRow,_sProfileUrl,_aSubmitter,_tsDateUpdated,_aPreviewMedia,_sDescription,_aRootCategory,_aFiles`;
+            urlV6 += `&_nPerpage=${PER_PAGE}&_nPage=${p}`;
 
-        const countUrl = `https://gamebanana.com/apiv11/Mod/Index?_nPage=1&_nPerpage=1&_aFilters%5BGeneric_Game%5D=${GAME_ID}&_sName=${encodeURIComponent(search)}`;
+            const countUrl = `https://gamebanana.com/apiv11/Mod/Index?_nPage=1&_nPerpage=1&_aFilters%5BGeneric_Game%5D=${GAME_ID}&_sName=${encodeURIComponent(search)}`;
 
-        const [resV6, countRes] = await Promise.all([fetch(urlV6), fetch(countUrl)]);
-        const recordsV6 = await resV6.json();
-        const countData = await countRes.json();
+            const [resV6, countRes] = await Promise.all([fetch(urlV6), fetch(countUrl)]);
+            const recordsV6 = await resV6.json();
+            const countData = await countRes.json();
 
-        // Enrich avec v11 en parallèle
-        const ids = (recordsV6 || []).map(mod => mod._idRow || mod._sProfileUrl?.split("/").pop());
-        const v11Map = {};
-        if (ids.length > 0) {
-          const v11Results = await Promise.all(
-            ids.map(id => fetch(`https://gamebanana.com/apiv11/Mod/${id}?_csvProperties=_aPreviewMedia,_sProfileUrl,_tsDateModified`).then(r => r.json()))
-          );
-          ids.forEach((id, i) => { v11Map[id] = v11Results[i]; });
+            const ids = (recordsV6 || []).map(mod => mod._idRow || mod._sProfileUrl?.split("/").pop());
+            const v11Map = {};
+            if (ids.length > 0) {
+                const v11Results = await Promise.all(
+                    ids.map(id => fetch(`https://gamebanana.com/apiv11/Mod/${id}?_csvProperties=_aPreviewMedia,_sProfileUrl,_tsDateModified`).then(r => r.json()))
+                );
+                ids.forEach((id, i) => { v11Map[id] = v11Results[i]; });
+            }
+
+            setTotalCount(Math.ceil((countData._aMetadata?._nRecordCount || 0) / PER_PAGE));
+            setMods((recordsV6 || []).map(mod => {
+                const id = mod._idRow || mod._sProfileUrl?.split("/").pop();
+                return normalizeMod(mod, v11Map[id] || {});
+            }));
+
+        } else if (catId) {
+            const urlV11 = `https://gamebanana.com/apiv11/Mod/Index?_nPage=${p}&_nPerpage=${PER_PAGE}&_aFilters%5BGeneric_Game%5D=${GAME_ID}&_aFilters%5BGeneric_Category%5D=${catId}&_sOrderBy=${sort}`;
+            const countUrl = `https://gamebanana.com/apiv11/Mod/Index?_nPage=1&_nPerpage=1&_aFilters%5BGeneric_Game%5D=${GAME_ID}&_aFilters%5BGeneric_Category%5D=${catId}`;
+
+            const [resV11, countRes] = await Promise.all([fetch(urlV11), fetch(countUrl)]);
+            const recordsV11 = await resV11.json();
+            const countData = await countRes.json();
+
+            setTotalCount(Math.ceil((countData._aMetadata?._nRecordCount || 0) / PER_PAGE));
+            setMods((recordsV11._aRecords || []).map(mod => normalizeMod(mod, mod)));
+
+        } else {
+            let urlV6 = `https://gamebanana.com/apiv6/Mod/ByGame?_aGameRowIds[]=${GAME_ID}`;
+            urlV6 += `&_csvProperties=_sName,_idRow,_sProfileUrl,_aSubmitter,_tsDateUpdated,_aPreviewMedia,_aRootCategory`;
+            urlV6 += `&_nPerpage=${PER_PAGE}&_nPage=${p}&_sOrderBy=${sort}`;
+
+            const urlV11 = `https://gamebanana.com/apiv11/Mod/Index?_nPage=${p}&_nPerpage=${PER_PAGE}&_aFilters%5BGeneric_Game%5D=${GAME_ID}`;
+            const countUrl = `https://gamebanana.com/apiv11/Mod/Index?_nPage=1&_nPerpage=1&_aFilters%5BGeneric_Game%5D=${GAME_ID}`;
+
+            const [resV6, resV11, countRes] = await Promise.all([fetch(urlV6), fetch(urlV11), fetch(countUrl)]);
+            const recordsV6 = await resV6.json();
+            const recordsV11 = await resV11.json();
+            const countData = await countRes.json();
+
+            const v11Map = {};
+            for (const mod of (recordsV11._aRecords || [])) { v11Map[mod._idRow] = mod; }
+
+            setTotalCount(Math.ceil((countData._aMetadata?._nRecordCount || 0) / PER_PAGE));
+            setMods((recordsV6 || []).map(mod => {
+                const id = mod._idRow || mod._sProfileUrl?.split("/").pop();
+                return normalizeMod(mod, v11Map[id] || {});
+            }));
         }
-
-        setTotalCount(Math.ceil((countData._aMetadata?._nRecordCount || 0) / PER_PAGE));
-        setMods((recordsV6 || []).map(mod => normalizeMod(mod, v11Map[mod._idRow || mod._sProfileUrl?.split("/").pop()] || {})));
-
-      } else {
-        let urlV6 = `https://gamebanana.com/apiv6/Mod/ByGame?_aGameRowIds[]=${GAME_ID}`;
-        urlV6 += `&_csvProperties=_sName,_idRow,_sProfileUrl,_aSubmitter,_tsDateUpdated,_aPreviewMedia,_aRootCategory`;
-        urlV6 += `&_nPerpage=${PER_PAGE}&_nPage=${p}&_sOrderBy=${sort}`;
-        if (catId) urlV6 += `&_aRootCategoryRowId=${catId}`;
-
-        let urlV11 = `https://gamebanana.com/apiv11/Mod/Index?_nPage=${p}&_nPerpage=${PER_PAGE}&_aFilters%5BGeneric_Game%5D=${GAME_ID}`;
-        if (catId) urlV11 += `&_aFilters%5BGeneric_Category%5D=${catId}`;
-
-        const countUrl = `https://gamebanana.com/apiv6/Mod/ByGame?_aGameRowIds[]=${GAME_ID}&_nPerpage=1&_nPage=1${catId ? `&_aRootCategoryRowId=${catId}` : ""}`;
-
-        const [resV6, resV11, countRes] = await Promise.all([fetch(urlV6), fetch(urlV11), fetch(countUrl)]);
-        const recordsV6 = await resV6.json();
-        const recordsV11 = await resV11.json();
-        const countData = await countRes.json();
-
-        const v11Map = {};
-        for (const mod of (recordsV11._aRecords || [])) { v11Map[mod._idRow] = mod; }
-
-        setTotalCount(Math.ceil((countData?._aMetadata?._nRecordCount || 0) / PER_PAGE));
-        setMods((recordsV6 || []).map(mod => {
-          const id = mod._idRow || mod._sProfileUrl?.split("/").pop();
-          return normalizeMod(mod, v11Map[id] || {});
-        }));
-      }
     } catch (e) {
-      addLog(`Error fetching mods: ${e}`);
+        addLog(`Error fetching mods: ${e}`);
     } finally {
-      setLoading(false);
+        setLoading(false);
     }
-  };
+};
 
   useEffect(() => { fetchMods(searchTerm, page); }, [page]);
 
@@ -654,7 +664,7 @@ function BrowseMods({ modsDir, addLog }) {
         <CatDropdown categories={categories} selectedCat={selectedCat} onSelect={handleCatSelect} />
         <select
           value={sortBy}
-          disabled={!!searchTerm}
+          disabled={!!searchTerm || selectedCat}
           onChange={(e) => { setSortBy(e.target.value); setPage(1); fetchMods("", 1, selectedCat, e.target.value); }}
           className="select select-bordered select-sm w-auto disabled:opacity-50"
         >
