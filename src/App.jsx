@@ -150,6 +150,7 @@ function Tab1({ modsDir, overwiteDir, addLog, logs}) {
         modsPath: modsDir,
         overwritePath: overwiteDir,
         gameDir: settingsData.game_dir,
+        prepatch: settingsData.prepatch || "",
       });
       addLog(chalk.yellow("Mounting VFS..."));
 
@@ -268,16 +269,18 @@ function Tab1({ modsDir, overwiteDir, addLog, logs}) {
   );
 }
 
-function SettingsTab() {
+function SettingsTab({ onSave }) {
   const [settings, setSettings] = useState({ theme: "", launch_args: [], game_dir: "", game_data_dir: "" });
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
+  const [prepatches, setPrepatches] = useState([]);
 
   useEffect(() => {
     invoke("get_settings")
       .then((data) => { setSettings(data); applyTheme(data.theme); })
       .catch(console.error)
       .finally(() => setLoading(false));
+    invoke("list_prepatches").then(setPrepatches).catch(console.error);
   }, []);
 
   const applyTheme = (theme) => {
@@ -319,6 +322,7 @@ function SettingsTab() {
       onSave(settings);
       alert("Settings saved!");
     } catch (e) {
+      console.error(e);
       alert("Error saving settings");
     } finally {
       setSaving(false);
@@ -381,6 +385,21 @@ function SettingsTab() {
           <button onClick={() => handleDetect("game_data_dir")} className="btn btn-sm btn-outline">Reset</button>
         </div>
       </div>
+
+      <div className="flex flex-col">
+    <label className="mb-1 text-sm font-semibold">Prepatch (Downgrade)</label>
+    <select
+        name="prepatch"
+        value={settings.prepatch || ""}
+        onChange={handleChange}
+        className="select select-bordered select-sm"
+    >
+        <option value="">None</option>
+        {prepatches.map(p => (
+            <option key={p} value={p}>{p}</option>
+        ))}
+    </select>
+  </div>
 
       <button onClick={handleSave} disabled={saving} className="btn btn-primary w-max">
         {saving ? "Saving..." : "Save Settings"}

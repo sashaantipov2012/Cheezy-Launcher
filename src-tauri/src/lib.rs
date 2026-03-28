@@ -24,6 +24,8 @@ struct Settings {
     game_dir: String,
     #[serde(default)]
     game_data_dir: String,
+    #[serde(default)]
+    prepatch: String,
 }
 
 #[tauri::command]
@@ -53,6 +55,7 @@ fn get_settings() -> Result<Settings, String> {
             launch_args: Vec::new(),
             game_dir,
             game_data_dir,
+            prepatch: String::new(),
         };
         fs::write(&config_path, serde_json::to_string_pretty(&default).unwrap())
             .map_err(|e| e.to_string())?;
@@ -240,6 +243,7 @@ fn prepare_overwrite(
   mods_path: String,
   overwrite_path: String,
   game_dir: String,
+  prepatch: String,
   app_handle: tauri::AppHandle,
 ) -> Result<(), String> {
   let log = |msg: &str| {
@@ -338,6 +342,39 @@ fn prepare_overwrite(
       }
       fs::copy(entry.path(), &dest).map_err(|e| e.to_string())?;
       log(&format!("    Copied: {}", rel.display()));
+    }
+
+    if !prepatch.is_empty() {
+        log("Finding prepatch...");
+        let prepatch_path = exe_dir()?.join("prepatches").join(format!("{}.xdelta", prepatch));
+        if prepatch_path.exists() {
+            log(&format!("Applying prepatch: {}", prepatch));
+
+            let source = game_files.iter().find(|f| {
+                f.file_name().unwrap_or_default().to_string_lossy().to_lowercase() == "data.win.po"
+            }).or_else(|| game_files.iter().find(|f| {
+                f.file_name().unwrap_or_default().to_string_lossy().to_lowercase() == "data.win"
+            })).ok_or_else(|| "data.win not found for prepatch".to_string())?;
+
+            let dest = overwrite_dir.join("data.win");
+            if let Some(parent) = dest.parent() {
+                fs::create_dir_all(parent).map_err(|e| e.to_string())?;
+            }
+
+            let status = Command::new(&xdelta)
+                .args(["-d", "-f", "-s"])
+                .arg(source)
+                .arg(&prepatch_path)
+                .arg(&dest)
+                .status()
+                .map_err(|e| e.to_string())?;
+
+            if status.success() {
+                log(&format!("  ✓ Prepatch applied -> data.win"));
+            } else {
+                return Err(format!("Prepatch failed: {}", prepatch));
+            }
+        }
     }
 
     log("Applying patches...");
@@ -517,13 +554,11 @@ fn mount_vfs(
   let over = Path::new(&overwrite_path);
   let root = Path::new(&vfs_root);
 
-  // Nettoyer et recréer vfs_root
   if root.exists() {
     fs::remove_dir_all(root).map_err(|e| e.to_string())?;
   }
   fs::create_dir_all(root).map_err(|e| e.to_string())?;
 
-  // 1. Hardlinks de tous les fichiers du jeu vers vfs_root
   for entry in walkdir::WalkDir::new(game) {
     let entry = entry.map_err(|e| e.to_string())?;
     let rel = entry.path().strip_prefix(game).map_err(|e| e.to_string())?;
@@ -535,7 +570,6 @@ fn mount_vfs(
       if let Some(parent) = dest.parent() {
         fs::create_dir_all(parent).map_err(|e| e.to_string())?;
       }
-      // Hardlink : pas de copie physique, même inode
       #[cfg(windows)]
       std::os::windows::fs::symlink_file(entry.path(), &dest)
         .or_else(|_| fs::copy(entry.path(), &dest).map(|_| ()))
@@ -546,7 +580,6 @@ fn mount_vfs(
     }
   }
 
-  // 2. Écraser avec les fichiers de overwrite/ (copie réelle, priorité)
   for entry in walkdir::WalkDir::new(over) {
     let entry = entry.map_err(|e| e.to_string())?;
     if !entry.path().is_file() {
@@ -557,7 +590,6 @@ fn mount_vfs(
     if let Some(parent) = dest.parent() {
       fs::create_dir_all(parent).map_err(|e| e.to_string())?;
     }
-    // Supprimer le symlink existant puis copier le vrai fichier
     if dest.exists() {
       fs::remove_file(&dest).map_err(|e| e.to_string())?;
     }
@@ -721,7 +753,6 @@ async fn fetch_file(url: String) -> Result<Vec<u8>, String> {
 
 #[tauri::command]
 fn detect_game_dir() -> Result<String, String> {
-    // Pizza Tower App ID sur Steam
     const PIZZA_TOWER_APP_ID: u32 = 2231450;
 
     let steam_dir = steamlocate::SteamDir::locate()
@@ -749,7 +780,6 @@ fn detect_game_data_dir() -> Result<String, String> {
             if path.exists() {
                 return Ok(path.to_string_lossy().to_string());
             }
-            // Retourner le path même s'il n'existe pas encore
             return Ok(path.to_string_lossy().to_string());
         }
     }
@@ -809,6 +839,21 @@ fn flatten_mod_dir(mod_path: String) -> Result<(), String> {
     Ok(())
 }
 
+#[tauri::command]
+fn list_prepatches() -> Result<Vec<String>, String> {
+    let dir = exe_dir()?.join("prepatches");
+    if !dir.exists() {
+        fs::create_dir_all(&dir).map_err(|e| e.to_string())?;
+        return Ok(vec![]);
+    }
+    Ok(fs::read_dir(&dir)
+        .map_err(|e| e.to_string())?
+        .filter_map(|e| e.ok())
+        .filter(|e| e.path().extension().map(|x| x == "xdelta").unwrap_or(false))
+        .filter_map(|e| e.path().file_stem().map(|s| s.to_string_lossy().to_string()))
+        .collect())
+}
+
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
   let shared_state: SharedState = Arc::new(Mutex::new(AppState::default()));
@@ -846,6 +891,7 @@ pub fn run() {
       detect_game_data_dir,
       get_mod_base_dir,
       flatten_mod_dir,
+      list_prepatches,
     ])
     .run(tauri::generate_context!())
     .expect("error while running tauri application");
