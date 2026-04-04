@@ -273,7 +273,7 @@ const handleToggleGML = async (e) => {
   >
     {operationRunning ? "Running..." : "Launch"}
   </button>
-  <div className="dropdown dropdown-bottom">
+  <div className="dropdown dropdown-bottom dropdown-center">
     <button tabIndex={0} className="btn btn-primary join-item px-2" disabled={operationRunning}>▾</button>
     <ul tabIndex={0} className="dropdown-content menu bg-base-100 rounded-box shadow-lg z-50 w-40 mt-1">
       <li className={!selectedMod ? "opacity-50 pointer-events-none" : ""}><a onClick={() => { if (!selectedMod) return; document.activeElement.blur(); handleRunFile("over"); }}>Overwrite Only</a></li>
