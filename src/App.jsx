@@ -12,6 +12,11 @@ import { SortableContext, verticalListSortingStrategy, useSortable, arrayMove } 
 import { CSS } from "@dnd-kit/utilities";
 import { restrictToVerticalAxis, restrictToParentElement } from "@dnd-kit/modifiers";
 
+import { onOpenUrl } from '@tauri-apps/plugin-deep-link';
+
+await onOpenUrl((urls) => {
+  console.log('deep link:', urls);
+});
 
 const themes = [
   "light",
