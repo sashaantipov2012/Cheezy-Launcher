@@ -1069,6 +1069,14 @@ pub fn run() {
     tauri::Builder::default()
         .plugin(tauri_plugin_deep_link::init())
         .manage(shared_state)
+        .setup(|app| {
+            #[cfg(any(target_os = "linux", all(debug_assertions, windows)))]
+            {
+            use tauri_plugin_deep_link::DeepLinkExt;
+            app.deep_link().register_all()?;
+            }
+            Ok(())
+        })
         .plugin(single_instance(|app, _argv, _cwd| {
             if let Some(w) = app.get_webview_window("main") {
                 w.set_focus().unwrap();
