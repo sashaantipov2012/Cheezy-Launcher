@@ -202,17 +202,14 @@ useEffect(() => {
 
   addLog(chalk.green("Executing GMLoader process..."));
 
-  const waitGmloader = setInterval(async () => {
-    const running = await invoke("is_operation_running");
-
-    if (!running) {
-      clearInterval(waitGmloader);
-
-      addLog(chalk.yellow("GMLoader Process finished, launching Pizza Tower..."));
-      await invoke("kill_process", { name: "PizzaTower.exe" });
-      launchPizzaTower();
-    }
-  }, 100);
+  const waitGmloader = await listen("process-ended", async (event) => {
+  if (event.payload === "GMLoader.exe") {
+    waitGmloader();
+    addLog(chalk.yellow("GMLoader Process finished, launching Pizza Tower..."));
+    await invoke("kill_process", { name: "PizzaTower.exe" });
+    launchPizzaTower();
+  }
+});
 
 } else {
   addLog(chalk.yellow("Launching Pizza Tower..."));

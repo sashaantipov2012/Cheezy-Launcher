@@ -804,6 +804,7 @@ async fn launch_game(
     exe_name: String,
     launch_args: Vec<String>,
     state: State<'_, SharedState>,
+    app_handle: tauri::AppHandle,
 ) -> Result<(), String> {
     {
         let mut s = state.lock().map_err(|e| e.to_string())?;
@@ -843,6 +844,7 @@ async fn launch_game(
         let mut s = state_clone.lock().unwrap();
         s.operation_running = false;
         s.game_pid = None;
+        let _ = app_handle.emit("process-ended", &exe_name);
     });
 
     Ok(())
