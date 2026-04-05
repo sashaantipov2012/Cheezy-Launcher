@@ -644,6 +644,14 @@ fn mount_vfs(
             if let Some(parent) = dest.parent() {
                 fs::create_dir_all(parent).map_err(|e| e.to_string())?;
             }
+
+            if !steam_api {
+            let fname = entry.path().file_name().unwrap_or_default().to_string_lossy().to_lowercase();
+            if fname == "steam_api64.dll" || fname == "steam_api.dll" || fname == "steamworks_x64.dll" || fname == "steamworks.dll" {
+            continue;
+        }
+    }
+
             #[cfg(windows)]
             std::os::windows::fs::symlink_file(entry.path(), &dest)
                 .or_else(|_| fs::copy(entry.path(), &dest).map(|_| ()))
