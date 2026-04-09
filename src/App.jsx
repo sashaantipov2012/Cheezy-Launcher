@@ -199,9 +199,15 @@ useEffect(() => {
           var c = event.payload.line
           var b = c.slice(15)
           var a = c.slice(10, 13)
+          var cancel = false;
+          if (c.endsWith("Warning, checkHash is false, make sure that you know what your doing. Reading game data from data.win")
+          || c.endsWith("o close...")
+          || c.endsWith("Cannot read keys when either application does not have a console or when console input has been redirected. Try Console.Read.")
+          || c.endsWith("nsolePal.ReadKey(Boolean intercept)")
+          || c.endsWith("GMLoaderProgram.Main(String[] args) in C:\\Hub\\Modding\\Project\\GMLoader\\GMLoader\\Program.cs:line 726")) cancel = true; // Ignore AutoRestart Crash for fixing the lame thing
           if (a === "WRN") b = chalk.yellow(b)
           if (a === "ERR") b = chalk.red(b)
-          if (!c.endsWith("Warning, checkHash is false, make sure that you know what your doing. Reading game data from data.win")) addLog(b);
+          if (!cancel) addLog(b);
         }
   });
   await invoke("launch_game", {

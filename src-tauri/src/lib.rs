@@ -768,7 +768,7 @@ fn mount_vfs(
                                 } else if line.starts_with("CheckHash=") {
                                     "CheckHash=false".to_string()
                                 } else if line.starts_with("AutoGameStart=") {
-                                    "AutoGameStart=true".to_string()
+                                    "AutoGameStart=false".to_string()
                                 } else {
                                     line.to_string()
                                 }
