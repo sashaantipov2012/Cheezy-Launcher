@@ -194,6 +194,16 @@ useEffect(() => {
         gmloaderEnabled: gmloaderEnabled,
       });
       if (gmloaderEnabled) {
+        const unlistenOutput = await listen("process-output", (event) => {
+        if (event.payload.exe === "GMLoader.exe") {
+          var c = event.payload.line
+          var b = c.slice(15)
+          var a = c.slice(10, 13)
+          if (a === "WRN") b = chalk.yellow(b)
+          if (a === "ERR") b = chalk.red(b)
+          if (!c.endsWith("Warning, checkHash is false, make sure that you know what your doing. Reading game data from data.win")) addLog(b);
+        }
+  });
   await invoke("launch_game", {
     vfsRoot,
     exeName: "GMLoader.exe",
@@ -202,14 +212,15 @@ useEffect(() => {
 
   addLog(chalk.green("Executing GMLoader process..."));
 
-  const waitGmloader = await listen("process-ended", async (event) => {
-  if (event.payload === "GMLoader.exe") {
-    waitGmloader();
-    addLog(chalk.yellow("GMLoader Process finished, launching Pizza Tower..."));
-    await invoke("kill_process", { name: "PizzaTower.exe" });
-    launchPizzaTower();
-  }
-});
+    const waitGmloader = await listen("process-ended", async (event) => {
+    if (event.payload === "GMLoader.exe") {
+      waitGmloader();
+      unlistenOutput();
+      addLog(chalk.yellow("GMLoader Process finished, launching Pizza Tower..."));
+      await invoke("kill_process", { name: "PizzaTower.exe" });
+      launchPizzaTower();
+    }
+  })
 
 } else {
   addLog(chalk.yellow("Launching Pizza Tower..."));

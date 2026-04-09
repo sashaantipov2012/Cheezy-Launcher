@@ -8,6 +8,8 @@ use tauri::Emitter;
 use tauri::{Manager, State};
 use tauri_plugin_single_instance::init as single_instance;
 use unrar::Archive;
+#[cfg(windows)]
+use std::os::windows::process::CommandExt;
 
 #[derive(Default)]
 struct AppState {
@@ -847,9 +849,13 @@ async fn launch_game(
         return Err(format!("Exe not found: {:?}", exe_path));
     }
 
-    let child = Command::new(&exe_path)
+    let mut child = Command::new(&exe_path)
         .current_dir(&vfs_root)
         .args(&launch_args)
+        .stdout(std::process::Stdio::piped())
+        .stderr(std::process::Stdio::piped())
+        .stdin(std::process::Stdio::null())
+        .creation_flags(0x08000000)
         .spawn()
         .map_err(|e| {
             let mut s = state.lock().unwrap();
@@ -863,9 +869,42 @@ async fn launch_game(
         s.game_pid = Some(pid);
     }
 
+    if let Some(stdout) = child.stdout.take() {
+        let app_handle_out = app_handle.clone();
+        let exe_name_out = exe_name.clone();
+        std::thread::spawn(move || {
+            use std::io::{BufRead, BufReader};
+            let reader = BufReader::new(stdout);
+            for line in reader.lines() {
+                if let Ok(line) = line {
+                    let _ = app_handle_out.emit(
+                        "process-output",
+                        serde_json::json!({ "exe": exe_name_out, "line": line, "stream": "stdout" }),
+                    );
+                }
+            }
+        });
+    }
+
+    if let Some(stderr) = child.stderr.take() {
+        let app_handle_err = app_handle.clone();
+        let exe_name_err = exe_name.clone();
+        std::thread::spawn(move || {
+            use std::io::{BufRead, BufReader};
+            let reader = BufReader::new(stderr);
+            for line in reader.lines() {
+                if let Ok(line) = line {
+                    let _ = app_handle_err.emit(
+                        "process-output",
+                        serde_json::json!({ "exe": exe_name_err, "line": line, "stream": "stderr" }),
+                    );
+                }
+            }
+        });
+    }
+
     let state_clone = Arc::clone(&state);
     std::thread::spawn(move || {
-        let mut child = child;
         let _ = child.wait();
         let mut s = state_clone.lock().unwrap();
         s.operation_running = false;
@@ -875,7 +914,6 @@ async fn launch_game(
 
     Ok(())
 }
-
 #[tauri::command]
 fn is_operation_running(state: State<'_, SharedState>) -> bool {
     state.lock().map(|s| s.operation_running).unwrap_or(false)
