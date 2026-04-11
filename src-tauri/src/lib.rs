@@ -1209,6 +1209,107 @@ fn kill_process(name: String) -> usize {
     killed
 }
 
+// Plugins Section
+
+#[derive(Serialize, Deserialize, Clone)]
+struct PluginAuthor {
+    name: String,
+    #[serde(default)]
+    url: String,
+}
+
+#[derive(Serialize, Deserialize, Clone)]
+struct PluginManifest {
+    id: String,
+    name: String,
+    version: String,
+    authors: Vec<PluginAuthor>,
+    #[serde(default)]
+    description: String,
+    #[serde(default)]
+    enabled: bool,
+}
+
+#[tauri::command]
+fn list_plugins() -> Result<Vec<PluginManifest>, String> {
+    let plugins_dir = exe_dir()?.join("plugins");
+    if !plugins_dir.exists() {
+        fs::create_dir_all(&plugins_dir).map_err(|e| e.to_string())?;
+        return Ok(vec![]);
+    }
+
+    let enabled_path = plugins_dir.join("enabled.json");
+    let enabled_ids: Vec<String> = if enabled_path.exists() {
+        serde_json::from_str(&fs::read_to_string(&enabled_path).unwrap_or_default())
+            .unwrap_or_default()
+    } else {
+        vec![]
+    };
+
+    let mut manifests = vec![];
+    for entry in fs::read_dir(&plugins_dir).map_err(|e| e.to_string())? {
+        let entry = entry.map_err(|e| e.to_string())?;
+        if !entry.path().is_dir() { continue; }
+        let manifest_path = entry.path().join("manifest.json");
+        if !manifest_path.exists() { continue; }
+        let content = fs::read_to_string(&manifest_path).map_err(|e| e.to_string())?;
+        let mut manifest: PluginManifest = serde_json::from_str(&content).map_err(|e| e.to_string())?;
+        manifest.enabled = enabled_ids.contains(&manifest.id);
+        manifests.push(manifest);
+    }
+    Ok(manifests)
+}
+
+fn get_plugin_dir(plugin_id: &str) -> PathBuf {
+    exe_dir()
+        .unwrap()
+        .join("plugins")
+        .join(plugin_id)
+}
+
+#[tauri::command]
+fn set_plugin_enabled(plugin_id: String, enabled: bool) -> Result<(), String> {
+    let plugins_dir = exe_dir()?.join("plugins");
+    let enabled_path = plugins_dir.join("enabled.json");
+    let mut ids: Vec<String> = if enabled_path.exists() {
+        serde_json::from_str(&fs::read_to_string(&enabled_path).unwrap_or_default())
+            .unwrap_or_default()
+    } else {
+        vec![]
+    };
+
+    if enabled {
+        if !ids.contains(&plugin_id) { ids.push(plugin_id); }
+    } else {
+        ids.retain(|id| id != &plugin_id);
+    }
+
+    fs::write(&enabled_path, serde_json::to_string_pretty(&ids).unwrap())
+        .map_err(|e| e.to_string())
+}
+
+#[tauri::command]
+fn read_plugin_script(plugin_id: String) -> Result<String, String> {
+    let dir = get_plugin_dir(&plugin_id);
+
+    let candidates = [
+        "index.tsx",
+        "index.ts",
+        "index.jsx",
+        "index.js",
+    ];
+
+    for file in candidates {
+        let path = dir.join(file);
+        if path.exists() {
+            return std::fs::read_to_string(path).map_err(|e| e.to_string());
+        }
+    }
+
+    Err("No entry file found".into())
+}
+
+
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
     let shared_state: SharedState = Arc::new(Mutex::new(AppState::default()));
@@ -1260,6 +1361,10 @@ pub fn run() {
             list_files_by_ext,
             is_process_running,
             kill_process,
+            // plugins
+            list_plugins,
+            set_plugin_enabled,
+            read_plugin_script,
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");

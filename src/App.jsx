@@ -4,6 +4,7 @@ import "./App.css";
 import AnsiToHtml from "ansi-to-html";
 import { onOpenUrl } from "@tauri-apps/plugin-deep-link";
 import { confirm } from "@tauri-apps/plugin-dialog";
+import * as Babel from "@babel/standalone";
 
 import {
   start,
@@ -18,6 +19,9 @@ import ManageMods from "./ManageMods";
 import ManageGMLoader from "./ManageGMLoader";
 import BrowseMods from "./BrowseMods";
 import SettingsTab from "./SettingsTab";
+
+import PluginsTab from "./PluginsTab";
+import PluginHost from "./PluginHost";
 
 function LogPanel({ logs, onClear }) {
   const convert = new AnsiToHtml();
@@ -66,16 +70,92 @@ function App() {
     discord_rpc: undefined,
   });
 
-  const tabs = [
+  const [pluginTabs, setPluginTabs] = useState([]);
+
+  useEffect(() => {
+    invoke("list_plugins")
+      .then((list) => {
+        const tabs = [];
+      })
+      .catch(console.error);
+  }, []);
+
+  const handlePluginsChange = async (enabledPlugins) => {
+    if (!window.React) {
+      const r = await import("react");
+      window.React = r;
+    }
+    const newTabs = [];
+    for (const plugin of enabledPlugins) {
+      try {
+        const code = await invoke("read_plugin_script", {
+          pluginId: plugin.id,
+        });
+        let registered = null;
+        window.__ptRegisterPlugin = (def) => {
+          registered = def;
+        };
+        // eslint-disable-next-line no-new-func
+        let compiled;
+
+        try {
+          compiled = Babel.transform(code, {
+            presets: ["react", "typescript"],
+            filename: "plugin.tsx",
+          }).code;
+        } catch (e) {
+          console.error(`Babel error in plugin ${plugin.id}:`, e);
+          continue;
+        }
+
+        try {
+          new Function(compiled)();
+        } catch (e) {
+          console.error(`Runtime error in plugin ${plugin.id}:`, e);
+          continue;
+        }
+        if (registered?.tabs) {
+          for (const tab of registered.tabs) {
+            newTabs.push({
+              pluginId: plugin.id,
+              tabId: tab.id,
+              label: tab.label,
+            });
+          }
+        }
+      } catch (e) {
+        console.error(`Failed to load tabs for plugin ${plugin.id}:`, e);
+      }
+    }
+    setPluginTabs(newTabs);
+    setActiveTab((prev) => {
+      if (!prev.startsWith("plugin:")) return prev;
+      const stillExists = newTabs.some(
+        (t) => `plugin:${t.pluginId}:${t.tabId}` === prev,
+      );
+      return stillExists ? prev : "tab1";
+    });
+  };
+
+  const staticTabs = [
     { id: "tab1", label: "Manage Mods", rpcState: "Managing mods" },
     { id: "tab2", label: "GMLoader Mods", rpcState: "GMLoader mods" },
     { id: "tab3", label: "Browse Mods", rpcState: "Browsing GameBanana" },
   ];
 
+  const Ftabs = [
+    ...staticTabs,
+    ...pluginTabs.map((t) => ({
+      id: `plugin:${t.pluginId}:${t.tabId}`,
+      label: t.label,
+      rpcState: t.rpcState,
+    })),
+  ];
+
   const rpcStartTime = useRef(Date.now());
   const getRpcState = (tabId) => {
     if (tabId === "settings") return "In settings";
-    return tabs.find((t) => t.id === tabId)?.rpcState || "Menu";
+    return Ftabs.find((t) => t.id === tabId)?.rpcState || "Menu";
   };
 
   useEffect(() => {
@@ -290,7 +370,7 @@ function App() {
     <div>
       <div role="tablist" className="tabs tabs-border flex justify-between">
         <div className="flex gap-1 tabs-border">
-          {tabs.map((tab) => (
+          {Ftabs.map((tab) => (
             <a
               key={tab.id}
               role="tab"
@@ -301,14 +381,23 @@ function App() {
             </a>
           ))}
         </div>
+        <div className="flex gap-1">
+          <a
+            role="tab"
+            className={`tab ${activeTab === "plugins" ? "tab-active" : ""}`}
+            onClick={() => setActiveTab("plugins")}
+          >
+            Plugins
+          </a>
 
-        <a
-          role="tab"
-          className={`tab ${activeTab === "settings" ? "tab-active" : ""}`}
-          onClick={() => setActiveTab("settings")}
-        >
-          Settings
-        </a>
+          <a
+            role="tab"
+            className={`tab ${activeTab === "settings" ? "tab-active" : ""}`}
+            onClick={() => setActiveTab("settings")}
+          >
+            Settings
+          </a>
+        </div>
       </div>
       <div className="flex-1 p-4 bg-base-200 rounded-box">
         <div
@@ -345,6 +434,24 @@ function App() {
               onInstall={handleGBInstall}
             />
           )}
+
+          {activeTab === "plugins" && (
+            <PluginsTab onPluginsChange={handlePluginsChange} />
+          )}
+
+          {activeTab.startsWith("plugin:") &&
+            (() => {
+              const [, pluginId, tabId] = activeTab.split(":");
+              return (
+                <PluginHost
+                  key={activeTab}
+                  pluginId={pluginId}
+                  tabId={tabId}
+                  addLog={addLog}
+                />
+              );
+            })()}
+
           {activeTab === "settings" && (
             <SettingsTab
               onSave={(s) => setSettings(s)}
