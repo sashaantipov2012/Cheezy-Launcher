@@ -31,6 +31,7 @@
     "@vitejs/plugin-react": "^4.3.4",
     "daisyui": "^5.5.19",
     "prettier": "3.8.2",
+    "typescript": "^6.0.2",
     "vite": "^6.0.3"
   }
 }
