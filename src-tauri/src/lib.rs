@@ -607,46 +607,6 @@ fn prepare_overwrite(
     Ok(())
 }
 
-fn run_xdelta(xdelta: &Path, source: &Path, patch: &Path, output: &Path) -> Result<(), String> {
-    let status = Command::new(xdelta)
-        .args(["-d", "-f", "-s"])
-        .arg(source)
-        .arg(patch)
-        .arg(output)
-        .status()
-        .map_err(|e| format!("xdelta launch error: {}", e))?;
-
-    if status.success() {
-        Ok(())
-    } else {
-        Err(format!("xdelta failed ({})", status.code().unwrap_or(-1)))
-    }
-}
-
-fn find_file_recursive(dir: &Path, name: &str) -> Result<Option<PathBuf>, String> {
-    let name_lower = name.to_lowercase();
-    for entry in walkdir::WalkDir::new(dir).min_depth(0) {
-        let entry = entry.map_err(|e| e.to_string())?;
-        if entry.path().is_file() {
-            if entry
-                .path()
-                .file_name()
-                .unwrap_or_default()
-                .to_string_lossy()
-                .to_lowercase()
-                == name_lower
-            {
-                return Ok(Some(entry.path().to_path_buf()));
-            }
-        }
-    }
-    Ok(None)
-}
-
-fn resolve_output_path(base: &Path, rel_parent: &Path, file_name: &str) -> PathBuf {
-    base.join(rel_parent).join(file_name)
-}
-
 #[tauri::command]
 fn mount_vfs(
     game_dir: String,
