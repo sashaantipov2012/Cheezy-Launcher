@@ -81,8 +81,7 @@ export default function PluginsTab({ onPluginsChange }) {
       </div>
 
       {plugins.length === 0 ? (
-        <div className="flex flex-col items-center justify-center gap-2 h-40 text-base-content/40 text-sm rounded-box border border-dashed border-base-content/20">
-          <span className="text-2xl">🧩</span>
+        <div className="flex flex-col items-center justify-center gap-2 h-40 text-base-content/40 text-lg rounded-box border border-dashed border-base-content/20">
           <span>No plugins installed</span>
         </div>
       ) : (
