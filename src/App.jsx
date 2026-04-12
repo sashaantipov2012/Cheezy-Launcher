@@ -71,6 +71,12 @@ function App() {
   });
 
   const [pluginTabs, setPluginTabs] = useState([]);
+  const [pluginReloadKey, setPluginReloadKey] = useState(0);
+  const reloadPlugins = () => {
+    pluginCacheRef.current = {};
+    setPluginReloadKey((k) => k + 1);
+    handlePluginsChange([]);
+  };
 
   useEffect(() => {
     let lastJson = "";
@@ -89,7 +95,7 @@ function App() {
       }
     }, 2000);
     return () => clearInterval(poll);
-  }, []);
+  }, [pluginReloadKey]);
 
   const pluginCacheRef = useRef({});
 
