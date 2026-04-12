@@ -103,17 +103,23 @@ export default function PluginsTab({ onPluginsChange }) {
                 </span>
               </div>
               {plugin.description && (
-                <div className="text-xs text-base-content/60 mt-0.5 prose prose-sm max-w-none">
+                <div
+                  className="text-xs text-base-content/60 mt-0.5 prose prose-sm max-w-none overflow-y-auto"
+                  style={{
+                    maxHeight:
+                      plugin.description.split("\n").length > 5 ||
+                      plugin.description.length > 400
+                        ? "6.5rem"
+                        : undefined,
+                  }}
+                >
                   <ReactMarkdown
                     remarkPlugins={[remarkGfm]}
                     components={{
                       a: ({ href, children }) => {
                         const handleClick = async (e) => {
                           e.preventDefault();
-
                           if (!href) return;
-
-                          // sécurité minimale
                           if (
                             href.startsWith("http://") ||
                             href.startsWith("https://")
@@ -121,7 +127,6 @@ export default function PluginsTab({ onPluginsChange }) {
                             await openUrl(href);
                           }
                         };
-
                         return (
                           <span
                             onClick={handleClick}

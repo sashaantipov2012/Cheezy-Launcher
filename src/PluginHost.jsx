@@ -33,6 +33,7 @@ import { openUrl } from "@tauri-apps/plugin-opener";
  *       {
  *         id: "my-tab",
  *         label: "My Tool",
+ *         rpcState: "Wow you can track the tool in discord!",
  *         component: MyTab,
  *       },
  *     ],
@@ -49,7 +50,6 @@ export default function PluginHost({ pluginId, tabId, addLog }) {
     setTabs(null);
     setError(null);
 
-    // Expose React globally for plugins
     if (!window.React) {
       import("react").then((r) => {
         window.React = r;
@@ -63,12 +63,12 @@ export default function PluginHost({ pluginId, tabId, addLog }) {
         window.__ptRegisterPlugin = (def) => {
           registered = def;
         };
-        let compiled;
 
+        let compiled;
         try {
           compiled = Babel.transform(code, {
             presets: ["react", "typescript"],
-            filename: "plugin.tsx", // important pour TSX
+            filename: "plugin.tsx",
           }).code;
         } catch (e) {
           throw new Error(
@@ -83,10 +83,12 @@ export default function PluginHost({ pluginId, tabId, addLog }) {
             `Runtime error in plugin "${pluginId}": ${e.message}`,
           );
         }
+
         if (!registered)
           throw new Error(
             `Plugin "${pluginId}" never called window.__ptRegisterPlugin()`,
           );
+
         setTabs(registered.tabs || []);
       })
       .catch((e) => setError(String(e)));
@@ -107,14 +109,33 @@ export default function PluginHost({ pluginId, tabId, addLog }) {
       </div>
     );
 
-  const tab = tabs.find((t) => t.id === tabId) ?? tabs[0];
-  if (!tab)
-    return (
-      <div className="p-4 text-sm text-base-content/50">
-        No tab found for id "{tabId}"
-      </div>
-    );
+  if (tabs.length === 0) return null;
 
-  const Component = tab.component;
-  return <Component addLog={addLog} invoke={invoke} openUrl={openUrl} />;
+  if (tabId) {
+    const tab = tabs.find((t) => t.id === tabId);
+    if (!tab)
+      return (
+        <div className="p-4 text-sm text-base-content/50">
+          No tab found for id "{tabId}"
+        </div>
+      );
+    const Component = tab.component;
+    return <Component addLog={addLog} invoke={invoke} openUrl={openUrl} />;
+  }
+
+  return (
+    <>
+      {tabs.map((tab) => {
+        const Component = tab.component;
+        return (
+          <Component
+            key={tab.id}
+            addLog={addLog}
+            invoke={invoke}
+            openUrl={openUrl}
+          />
+        );
+      })}
+    </>
+  );
 }

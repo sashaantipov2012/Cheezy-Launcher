@@ -73,11 +73,22 @@ function App() {
   const [pluginTabs, setPluginTabs] = useState([]);
 
   useEffect(() => {
-    invoke("list_plugins")
-      .then((list) => {
-        const tabs = [];
-      })
-      .catch(console.error);
+    let lastJson = "";
+    const poll = setInterval(async () => {
+      try {
+        const list = await invoke("list_plugins");
+        const json = JSON.stringify(
+          list.map((p) => ({ id: p.id, enabled: p.enabled })),
+        );
+        if (json !== lastJson) {
+          lastJson = json;
+          handlePluginsChange(list.filter((p) => p.enabled));
+        }
+      } catch (e) {
+        console.error(e);
+      }
+    }, 2000);
+    return () => clearInterval(poll);
   }, []);
 
   const pluginCacheRef = useRef({});
@@ -134,19 +145,19 @@ function App() {
           continue;
         }
 
-        const pluginTabs = [];
+        const loadedTabs = [];
         if (registered?.tabs) {
           for (const tab of registered.tabs) {
-            pluginTabs.push({
+            loadedTabs.push({
               pluginId: plugin.id,
               tabId: tab.id,
               label: tab.label,
+              rpcState: tab.rpcState || tab.label,
             });
           }
         }
-
-        cache[plugin.id] = { hash, tabs: pluginTabs };
-        newTabs.push(...pluginTabs);
+        cache[plugin.id] = { hash, tabs: loadedTabs };
+        newTabs.push(...loadedTabs);
       } catch (e) {
         console.error(`Failed to load tabs for plugin ${plugin.id}:`, e);
       }
@@ -178,7 +189,7 @@ function App() {
     ...pluginTabs.map((t) => ({
       id: `plugin:${t.pluginId}:${t.tabId}`,
       label: t.label,
-      rpcState: t.rpcState,
+      rpcState: t.rpcState || t.label,
     })),
   ];
 
