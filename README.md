@@ -16,7 +16,7 @@ It aims to improve the Pizza Tower Modding Community experience by providing a m
 
 
 
-##### ⚠️ WARNING: This project is still a Work In Progress (WIP). Expect bugs, missing features, and frequent changes.
+## ⚠️ WARNING: This project is still a Work In Progress (WIP). Expect bugs, missing features, and frequent changes.
 
 
 
