@@ -278,6 +278,11 @@ fn apply_xdelta_patch(
     }
 
     let mut cmd = Command::new(&xdelta);
+
+    #[cfg(windows)]
+    {
+    cmd.creation_flags(0x08000000); // CREATE_NO_WINDOW
+    }
     cmd.arg("-d");
     if overwrite {
         cmd.arg("-f");
