@@ -70,6 +70,10 @@ function App() {
     discord_rpc: undefined,
   });
 
+  useEffect(() => {
+  document.documentElement.setAttribute("data-theme", "light");
+}, []);
+
   const [pluginTabs, setPluginTabs] = useState([]);
   const [pluginReloadKey, setPluginReloadKey] = useState(0);
   const reloadPlugins = () => {
@@ -234,6 +238,7 @@ function App() {
     document
       .querySelectorAll("[data-theme-custom]")
       .forEach((el) => el.remove());
+    if (!theme) theme = "light";
     document.documentElement.setAttribute("data-theme", theme);
     try {
       const exeDir = await invoke("get_main_dir", { folderName: "" });
