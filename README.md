@@ -29,7 +29,7 @@ It aims to improve the Pizza Tower Modding Community experience by providing a m
 |Easy to use / Easy UI|✅|❌|✅|
 |Simple Mod installation|✅|⚠️ xdelta mods require manual setup (GMLoader mods are easier)|✅|
 |Plugins System|❌|✅|🚧 Very WIP and not sandboxed yet|
-|Theme support|❌|✅|✅|
+|Theme support|⚠️ [PO+](https://gamebanana.com/tools/21866) only|✅|✅|
 |GMLoader support|⚠️ [PO+](https://gamebanana.com/tools/21866) only — GMLoader has limited support (manual workaround, no mod control or priority order)|✅|✅|
 |Gamebanana 1 click installer support|✅|❌|✅|
 
