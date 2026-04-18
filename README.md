@@ -14,7 +14,7 @@ It aims to improve the Pizza Tower Modding Community experience by providing a m
 
 
 
-
+Check the [Wiki](https://github.com/Aness6040/Cheezy-Launcher/wiki) for more information about Cheezy Launcher.
 
 ## ⚠️ WARNING: This project is still a Work In Progress (WIP). Expect bugs, missing features, and frequent changes.
 ## Using Admin or Developer mode is more than recommended since it uses technologies like symlinks
@@ -30,7 +30,7 @@ It aims to improve the Pizza Tower Modding Community experience by providing a m
 |Simple Mod installation|✅|⚠️ xdelta mods require manual setup (GMLoader mods are easier)|✅|
 |Plugins System|❌|✅|🚧 Very WIP and not sandboxed yet|
 |Theme support|⚠️ [PO+](https://gamebanana.com/tools/21866) only|✅|✅|
-|GMLoader support|⚠️ [PO+](https://gamebanana.com/tools/21866) only — GMLoader has limited support (manual workaround, no mod control or priority order)|✅|✅|
+|GMLoader support|⚠️ [PO+](https://gamebanana.com/tools/21866) only — GMLoader has limited support (manual workaround)|✅|✅|
 |Gamebanana 1 click installer support|✅|❌|✅|
 
 
