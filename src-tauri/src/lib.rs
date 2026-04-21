@@ -32,6 +32,8 @@ struct Settings {
     #[serde(default)]
     exe_name: String,
     #[serde(default)]
+    gmloader_exe: String,
+    #[serde(default)]
     data_target: String,
     #[serde(default)]
     prepatch: String,
@@ -127,6 +129,7 @@ fn get_settings() -> Result<Settings, String> {
         game_dir,
         game_data_dir,
         exe_name: "PizzaTower.exe".to_string(),
+        gmloader_exe: "GMLoader.exe".to_string(),
         data_target: "data.win".to_string(),
         prepatch: String::new(),
         steam_api: true,
@@ -183,6 +186,30 @@ fn normalize_path(path: &str) -> PathBuf {
 
 fn get_xdelta_path() -> Result<PathBuf, String> {
     Ok(exe_dir()?.join("deps").join("xdelta3.exe"))
+}
+
+fn link_or_copy(src: &Path, dst: &Path) -> Result<(), String> {
+    if let Some(parent) = dst.parent() {
+        fs::create_dir_all(parent).map_err(|e| e.to_string())?;
+    }
+
+    // 1. hardlink (no perms, same volume mandatory)
+    if fs::hard_link(src, dst).is_ok() {
+        return Ok(());
+    }
+
+    // 2. symlink (admin rights or dev mode)
+    #[cfg(windows)]
+    if std::os::windows::fs::symlink_file(src, dst).is_ok() {
+        return Ok(());
+    }
+    #[cfg(unix)]
+    if std::os::unix::fs::symlink(src, dst).is_ok() {
+        return Ok(());
+    }
+
+    // 3. copy (universal fallback, annoying)
+    fs::copy(src, dst).map(|_| ()).map_err(|e| e.to_string())
 }
 
 #[tauri::command]
@@ -719,16 +746,11 @@ fn mount_vfs(
 
             if overwrite_files.contains(rel) {
                 let over_src = over.join(rel);
-                fs::copy(&over_src, &dest).map_err(|e| e.to_string())?;
+                link_or_copy(&over_src, &dest)?;
                 continue;
             }
 
-            #[cfg(windows)]
-            std::os::windows::fs::symlink_file(entry.path(), &dest)
-                .or_else(|_| fs::copy(entry.path(), &dest).map(|_| ()))
-                .map_err(|e| e.to_string())?;
-            #[cfg(not(windows))]
-            std::os::unix::fs::symlink(entry.path(), &dest).map_err(|e| e.to_string())?;
+            link_or_copy(entry.path(), &dest)?;
         }
     }
     for rel in &overwrite_files {
@@ -740,7 +762,7 @@ fn mount_vfs(
         if let Some(parent) = dest.parent() {
             fs::create_dir_all(parent).map_err(|e| e.to_string())?;
         }
-        fs::copy(&over_src, &dest).map_err(|e| e.to_string())?;
+        link_or_copy(&over_src, &dest)?;
     }
 
     if gmloader_enabled {
@@ -761,14 +783,7 @@ fn mount_vfs(
             fs::remove_file(&vfs_data_win_dest).map_err(|e| e.to_string())?;
         }
 
-        #[cfg(windows)]
-        std::os::windows::fs::symlink_file(&data_win_dest, &vfs_data_win_dest)
-            .or_else(|_| fs::copy(&data_win_dest, &vfs_data_win_dest).map(|_| ()))
-            .map_err(|e| e.to_string())?;
-
-        #[cfg(unix)]
-        std::os::unix::fs::symlink(&data_win_dest, &vfs_data_win_dest)
-            .map_err(|e| e.to_string())?;
+        link_or_copy(&data_win_dest, &vfs_data_win_dest)?;
 
         let gmloader_src = exe_dir()?.join("deps").join("GMLoader");
 
@@ -814,14 +829,7 @@ fn mount_vfs(
                     fs::write(&overwrite_ini_path, &content).map_err(|e| e.to_string())?;
 
                     let vfs_ini_dest = root.join("GMLoader.ini");
-                    #[cfg(windows)]
-                    std::os::windows::fs::symlink_file(&overwrite_ini_path, &vfs_ini_dest)
-                        .or_else(|_| fs::copy(&overwrite_ini_path, &vfs_ini_dest).map(|_| ()))
-                        .map_err(|e| e.to_string())?;
-                    #[cfg(unix)]
-                    std::os::unix::fs::symlink(&overwrite_ini_path, &vfs_ini_dest)
-                        .map_err(|e| e.to_string())?;
-
+                    link_or_copy(&overwrite_ini_path, &vfs_ini_dest)?;
                     continue;
                 }
 
@@ -832,12 +840,7 @@ fn mount_vfs(
                     if let Some(parent) = dest.parent() {
                         fs::create_dir_all(parent).map_err(|e| e.to_string())?;
                     }
-                    #[cfg(windows)]
-                    std::os::windows::fs::symlink_file(entry.path(), &dest)
-                        .or_else(|_| fs::copy(entry.path(), &dest).map(|_| ()))
-                        .map_err(|e| e.to_string())?;
-                    #[cfg(unix)]
-                    std::os::unix::fs::symlink(entry.path(), &dest).map_err(|e| e.to_string())?;
+                    link_or_copy(entry.path(), &dest)?;
                 }
             }
         }

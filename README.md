@@ -23,8 +23,8 @@ Check the [Wiki](https://github.com/Aness6040/Cheezy-Launcher/wiki) for more inf
 
 |Features|[Pizza Oven](https://github.com/TekkaGB/PizzaOven)|[Mod Organizer 2 (Senjay Edition)](https://github.com/Senjay-id/modorganizer2-senjay)|Cheezy Launcher|
 |-|-|-|-|
-|No admin rights or developer mode required|✅|✅|❌ This is currently the main limitation of Cheezy Launcher and is a high-priority issue to resolve.|
-|VFS support|❌(Everything is overwritten and backed-up for mods)|✅ (USVFS)|⚠️ Yes but limited (symlink)|
+|No admin rights or developer mode required|✅|✅|⚠️ Depends on the device and drive, it may disable VFS|
+|VFS support|❌(Everything is overwritten and backed-up for mods)|✅ (USVFS)|⚠️ Yes but limited (depends on admin/dev permission, symlink)|
 |Auto Updates|✅|❌|❌|
 |Easy to use / Easy UI|✅|❌|✅|
 |Simple Mod installation|✅|⚠️ xdelta mods require manual setup (GMLoader mods are easier)|✅|
