@@ -1,50 +1,23 @@
-import { useState, useEffect, useRef } from "react";
+import { useState, useEffect } from "react";
 import { invoke } from "@tauri-apps/api/core";
 import * as Babel from "@babel/standalone";
 import { openUrl } from "@tauri-apps/plugin-opener";
+import { joinPath, getGmlDir } from "./pathUtils";
+import "./App.css";
 
-/**
- * Loads a plugin's index.js and renders it.
- *
- * Plugin index.js contract:
- *   The script must call window.__ptRegisterPlugin({ tabs, ... })
- *   where `tabs` is an array of { id, label, component: ReactComponent }
- *
- * Example plugin index.js (or .jsx, typescript is also supported):
- * (function () {
- *   const React = window.React;
- *   const { useState } = React;
- *
- *   function MyTab({ addLog, invoke }) {
- *     const [count, setCount] = useState(0);
- *
- *     return (
- *       <div>
- *         <h1>Hello Plugin</h1>
- *         <button onClick={() => setCount(count + 1)}>
- *           Count: {count}
- *         </button>
- *       </div>
- *     );
- *   }
- *
- *   window.__ptRegisterPlugin({
- *     tabs: [
- *       {
- *         id: "my-tab",
- *         label: "My Tool",
- *         rpcState: "Wow you can track the tool in discord!",
- *         component: MyTab,
- *       },
- *     ],
- *   });
- * })();
- *
- * Props forwarded to every tab component: { addLog, invoke }
- */
+const h = (...args) => window.React.createElement(...args);
+
 export default function PluginHost({ pluginId, tabId, addLog }) {
   const [tabs, setTabs] = useState(null);
   const [error, setError] = useState(null);
+
+  const pluginAPI = {
+    addLog,
+    invoke,
+    openUrl,
+    joinPath,
+    getGmlDir,
+  };
 
   useEffect(() => {
     setTabs(null);
@@ -59,12 +32,14 @@ export default function PluginHost({ pluginId, tabId, addLog }) {
     invoke("read_plugin_script", { pluginId })
       .then((code) => {
         delete window.__ptRegisterPlugin;
+
         let registered = null;
         window.__ptRegisterPlugin = (def) => {
           registered = def;
         };
 
         let compiled;
+
         try {
           compiled = Babel.transform(code, {
             presets: ["react", "typescript"],
@@ -84,58 +59,76 @@ export default function PluginHost({ pluginId, tabId, addLog }) {
           );
         }
 
-        if (!registered)
+        if (!registered) {
           throw new Error(
             `Plugin "${pluginId}" never called window.__ptRegisterPlugin()`,
           );
+        }
 
         setTabs(registered.tabs || []);
       })
       .catch((e) => setError(String(e)));
   }, [pluginId]);
 
-  if (error)
-    return (
-      <div className="p-4 text-error text-sm rounded-box border border-error/30 bg-error/5">
-        <p className="font-semibold mb-1">Plugin error — {pluginId}</p>
-        <pre className="text-xs overflow-auto whitespace-pre-wrap">{error}</pre>
-      </div>
+  if (error) {
+    return h(
+      "div",
+      {
+        className:
+          "p-4 text-error text-sm rounded-box border border-error/30 bg-error/5",
+      },
+      h("p", { className: "font-semibold mb-1" }, `Plugin error — ${pluginId}`),
+      h(
+        "pre",
+        { className: "text-xs overflow-auto whitespace-pre-wrap" },
+        error,
+      ),
     );
+  }
 
-  if (!tabs)
-    return (
-      <div className="flex items-center justify-center h-32 text-base-content/40 text-sm">
-        Loading plugin…
-      </div>
+  // ⏳ loading
+  if (!tabs) {
+    return h(
+      "div",
+      {
+        className:
+          "flex items-center justify-center h-32 text-base-content/40 text-sm",
+      },
+      "Loading plugin…",
     );
+  }
 
   if (tabs.length === 0) return null;
 
   if (tabId) {
     const tab = tabs.find((t) => t.id === tabId);
-    if (!tab)
-      return (
-        <div className="p-4 text-sm text-base-content/50">
-          No tab found for id "{tabId}"
-        </div>
+
+    if (!tab) {
+      return h(
+        "div",
+        { className: "p-4 text-sm text-base-content/50" },
+        `No tab found for id "${tabId}"`,
       );
+    }
+
     const Component = tab.component;
-    return <Component addLog={addLog} invoke={invoke} openUrl={openUrl} />;
+
+    return h(Component, pluginAPI);
   }
 
-  return (
-    <>
-      {tabs.map((tab) => {
-        const Component = tab.component;
-        return (
-          <Component
-            key={tab.id}
-            addLog={addLog}
-            invoke={invoke}
-            openUrl={openUrl}
-          />
-        );
-      })}
-    </>
+  return h(
+    "div",
+    {
+      className:
+        "w-full h-full p-4 bg-base-100 text-base-content overflow-auto",
+    },
+    h(
+      "div",
+      {
+        className:
+          "w-full p-4 rounded-box bg-base-200 shadow-md border border-base-300",
+      },
+      h(Component, pluginAPI),
+    ),
   );
 }

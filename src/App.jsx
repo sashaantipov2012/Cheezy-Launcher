@@ -5,6 +5,7 @@ import AnsiToHtml from "ansi-to-html";
 import { onOpenUrl } from "@tauri-apps/plugin-deep-link";
 import { confirm } from "@tauri-apps/plugin-dialog";
 import * as Babel from "@babel/standalone";
+import { joinPath, getGmlDir } from "./pathUtils";
 
 import {
   start,
@@ -243,7 +244,7 @@ function App() {
     try {
       const exeDir = await invoke("get_main_dir", { folderName: "" });
       let css = await invoke("read_item", {
-        path: `${exeDir}\\themes\\${theme}.css`,
+        path: joinPath(exeDir, "themes", `${theme}.css`),
       });
       const el = document.createElement("style");
       el.setAttribute("data-theme-custom", theme);
@@ -342,10 +343,10 @@ function App() {
 
       if (isCYOP) {
         const settingsData = await invoke("get_settings");
-        targetModsPath = `${settingsData.game_data_dir}\\towers`;
+        targetModsPath = joinPath(settingsData.game_data_dir, "towers");
         writeModJson = false;
       } else if (isGMLoader) {
-        targetModsPath = modsDir.replace(/[/\\]mods$/, "\\mods_GML");
+        targetModsPath = getGmlDir(modsDir);
         writeModJson = false;
       }
 
@@ -368,7 +369,7 @@ function App() {
 
       if (isCYOP)
         await invoke("flatten_mod_dir", {
-          modPath: `${targetModsPath}\\${modName}`,
+          modPath: joinPath(targetModsPath, modName),
         });
 
       if (writeModJson) {
@@ -390,7 +391,7 @@ function App() {
           lastupdate: new Date().toISOString(),
         };
         await invoke("edit_item", {
-          path: `${targetModsPath}\\${modName}\\mod.json`,
+          path: joinPath(targetModsPath, modName, "mod.json"),
           content: JSON.stringify(modJson, null, 2),
         });
       }

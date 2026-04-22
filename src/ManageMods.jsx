@@ -2,6 +2,7 @@ import { useState, useEffect } from "react";
 import { invoke } from "@tauri-apps/api/core";
 import { listen } from "@tauri-apps/api/event";
 import chalk from "chalk";
+import { joinPath, getGmlDir } from "./pathUtils";
 
 function ModCard({
   modPath,
@@ -46,7 +47,7 @@ function ModCard({
 
   const handleOpenFolder = (e) => {
     e.stopPropagation();
-    invoke("open_item", { path: modPath.replace(/\//g, "\\") });
+    invoke("open_item", { path: modPath });
     setContextMenu(null);
   };
 
@@ -185,7 +186,7 @@ function ManageMods({ modsDir, overwiteDir, addLog, logs, onDropInstall }) {
       if (selectedMod) {
         try {
           const modSettingsRaw = await invoke("read_item", {
-            path: `${modsDir}\\${selectedMod}\\settings.json`,
+            path: joinPath(modsDir, selectedMod, "settings.json"),
           });
           const modSettings = JSON.parse(modSettingsRaw);
           effectiveSettings = { ...effectiveSettings, ...modSettings };
@@ -193,7 +194,7 @@ function ManageMods({ modsDir, overwiteDir, addLog, logs, onDropInstall }) {
           // ignore
         }
       }
-      const gmlDir = modsDir.replace(/[/\\]mods$/, "\\mods_GML");
+      const gmlDir = getGmlDir(modsDir);
       if (mode !== "launch") {
         await invoke("prepare_overwrite", {
           mods: selectedMod ? [selectedMod] : [],
@@ -220,7 +221,8 @@ function ManageMods({ modsDir, overwiteDir, addLog, logs, onDropInstall }) {
             effectiveSettings.gmloader_enabled ?? gmloaderEnabled,
         });
 
-        const GMLOADER_EXE = "GMLoader.exe"; /* navigator.platform.toLowerCase().includes("win")
+        const GMLOADER_EXE =
+          "GMLoader.exe"; /* navigator.platform.toLowerCase().includes("win")
           ? "GMLoader.exe"
           : "GMLoader.bin"; */
         if (gmloaderEnabled) {
@@ -329,7 +331,7 @@ function ManageMods({ modsDir, overwiteDir, addLog, logs, onDropInstall }) {
     const exeDir = await invoke("get_main_dir", { folderName: "" });
     const settings = await invoke("get_settings");
     await invoke("edit_item", {
-      path: `${exeDir}\\settings.json`,
+      path: joinPath(exeDir, "settings.json"),
       content: JSON.stringify({ ...settings, gmloader_enabled: val }, null, 2),
     });
   };

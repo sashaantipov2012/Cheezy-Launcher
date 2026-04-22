@@ -1,6 +1,7 @@
 import { useState, useEffect } from "react";
 import { invoke } from "@tauri-apps/api/core";
 import { open } from "@tauri-apps/plugin-dialog";
+import { joinPath } from "./pathUtils";
 import "./App.css";
 const themes = ["light", "dark"];
 
@@ -65,7 +66,7 @@ function SettingsTab({ onSave, applyTheme }) {
     try {
       const exeDir = await invoke("get_main_dir", { folderName: "" });
       await invoke("edit_item", {
-        path: `${exeDir}//settings.json`,
+        path: joinPath(exeDir, "settings.json"),
         content: JSON.stringify(settings, null, 2),
       });
       await applyTheme(settings.theme);

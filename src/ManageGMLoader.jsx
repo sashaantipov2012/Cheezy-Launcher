@@ -2,6 +2,7 @@ import { useState, useEffect, useRef } from "react";
 import { invoke } from "@tauri-apps/api/core";
 import { listen } from "@tauri-apps/api/event";
 import "./App.css";
+import { joinPath, getGmlDir } from "./pathUtils";
 
 import { DndContext, closestCenter } from "@dnd-kit/core";
 import {
@@ -128,8 +129,8 @@ function ManageGMLoader({ modsDir, addLog, onDropInstall }) {
     };
   }, [modsDir]);
 
-  const gmlDir = modsDir?.replace(/[/\\]mods$/, "\\mods_GML");
-  const modsJsonPath = `${gmlDir}\\mods.json`;
+  const gmlDir = getGmlDir(modsDir);
+  const modsJsonPath = joinPath(gmlDir, "mods.json");
 
   const fetchMods = async () => {
     if (!gmlDir || isDragging.current) return;
@@ -289,14 +290,14 @@ function ManageGMLoader({ modsDir, addLog, onDropInstall }) {
     const confirmed = await window.confirm(`Delete ${targets.length} mod(s)?`);
     if (!confirmed) return;
     for (const name of targets) {
-      await invoke("remove_item", { path: `${gmlDir}\\${name}` });
+      await invoke("remove_item", { path: joinPath(gmlDir, name) });
     }
     setSelected([]);
     fetchMods();
   };
 
   const handleOpenFolder = (name) => {
-    invoke("open_item", { path: `${gmlDir}\\${name}` });
+    invoke("open_item", { path: joinPath(gmlDir, name) });
     setContextMenu(null);
   };
 
