@@ -34,8 +34,7 @@
     "active": true,
     "targets": "all",
     "resources": [
-      "deps/**/*",
-      "prepatches/*"
+      "deps/**/*"
     ],
     "icon": [
       "icons/32x32.png",

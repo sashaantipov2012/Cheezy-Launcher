@@ -219,9 +219,16 @@ function ManageMods({ modsDir, overwiteDir, addLog, logs, onDropInstall }) {
           gmloaderEnabled:
             effectiveSettings.gmloader_enabled ?? gmloaderEnabled,
         });
+
+        const GMLOADER_EXE = "GMLoader.exe"; /* navigator.platform.toLowerCase().includes("win")
+          ? "GMLoader.exe"
+          : "GMLoader.bin"; */
         if (gmloaderEnabled) {
           const unlistenOutput = await listen("process-output", (event) => {
-            if (event.payload.exe === (effectiveSettings.gmloader_exe || "GMLoader.exe")) {
+            if (
+              event.payload.exe ===
+              (effectiveSettings.gmloader_exe || GMLOADER_EXE)
+            ) {
               var c = event.payload.line;
               var b = c.slice(15);
               var a = c.slice(10, 13);
@@ -247,14 +254,16 @@ function ManageMods({ modsDir, overwiteDir, addLog, logs, onDropInstall }) {
           });
           await invoke("launch_game", {
             vfsRoot,
-            exeName: effectiveSettings.gmloader_exe || "GMLoader.exe",
+            exeName: effectiveSettings.gmloader_exe || GMLOADER_EXE,
             launchArgs: [],
           });
 
           addLog(chalk.green("Executing GMLoader process..."));
 
           const waitGmloader = await listen("process-ended", async (event) => {
-            if (event.payload === (effectiveSettings.gmloader_exe || "GMLoader.exe")) {
+            if (
+              event.payload === (effectiveSettings.gmloader_exe || GMLOADER_EXE)
+            ) {
               waitGmloader();
               unlistenOutput();
               addLog(

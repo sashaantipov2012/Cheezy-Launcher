@@ -145,6 +145,19 @@ fn get_settings() -> Result<Settings, String> {
     Ok(default)
 }
 
+fn build_command(exe_path: &Path) -> Command {
+    #[cfg(windows)]
+    {
+        Command::new(exe_path)
+    }
+    #[cfg(not(windows))]
+    {
+        let mut cmd = Command::new("wine");
+        cmd.arg(exe_path);
+        cmd
+    }
+}
+
 fn locate_pizza_tower() -> Option<String> {
     steamlocate::SteamDir::locate()
         .ok()
@@ -163,14 +176,18 @@ fn locate_game_data_dir() -> Option<String> {
     #[cfg(windows)]
     {
         std::env::var("APPDATA").ok().map(|p| {
+            Path::new(&p).join("PizzaTower_GM2").to_string_lossy().to_string()
+        })
+    }
+    #[cfg(not(windows))]
+    {
+        std::env::var("HOME").ok().map(|p| {
             Path::new(&p)
-                .join("PizzaTower_GM2")
+                .join(".local/share/PizzaTower_GM2")
                 .to_string_lossy()
                 .to_string()
         })
     }
-    #[cfg(not(windows))]
-    None
 }
 
 fn exe_dir() -> Result<PathBuf, String> {
@@ -181,7 +198,10 @@ fn exe_dir() -> Result<PathBuf, String> {
 }
 
 fn normalize_path(path: &str) -> PathBuf {
-    PathBuf::from(path.replace("/", "\\"))
+    #[cfg(windows)]
+    return PathBuf::from(path.replace("/", "\\"));
+    #[cfg(not(windows))]
+    return PathBuf::from(path);
 }
 
 fn get_xdelta_path() -> Result<PathBuf, String> {
@@ -304,7 +324,7 @@ fn apply_xdelta_patch(
         return Err("Patch file not found".into());
     }
 
-    let mut cmd = Command::new(&xdelta);
+    let mut cmd = build_command(&xdelta);
 
     #[cfg(windows)]
     {
@@ -472,7 +492,7 @@ fn prepare_overwrite(
                     fs::create_dir_all(parent).map_err(|e| e.to_string())?;
                 }
 
-                let mut cmd = Command::new(&xdelta);
+                let mut cmd = build_command(&xdelta);
 
                 #[cfg(windows)]
                 {
@@ -579,7 +599,7 @@ fn prepare_overwrite(
                 ));
                 let actual_dest = if use_tmp { &tmp } else { &dest };
 
-                let mut cmd = Command::new(&xdelta);
+                let mut cmd = build_command(&xdelta);
 
                 #[cfg(windows)]
                 {
@@ -794,7 +814,6 @@ fn mount_vfs(
                     .path()
                     .strip_prefix(&gmloader_src)
                     .map_err(|e| e.to_string())?;
-
                 if rel == Path::new("GMLoader.ini") {
                     let data_win_path = {
                         let ow = over.join("data.win");
@@ -884,19 +903,23 @@ async fn launch_game(
         return Err(format!("Exe not found: {:?}", exe_path));
     }
 
-    let mut child = Command::new(&exe_path)
-        .current_dir(&vfs_root)
-        .args(&launch_args)
-        .stdout(std::process::Stdio::piped())
-        .stderr(std::process::Stdio::piped())
-        .stdin(std::process::Stdio::null())
-        .creation_flags(0x08000000)
-        .spawn()
-        .map_err(|e| {
+    let mut child = {
+        let mut cmd = build_command(&exe_path);
+        cmd.current_dir(&vfs_root)
+            .args(&launch_args)
+            .stdout(std::process::Stdio::piped())
+            .stderr(std::process::Stdio::piped())
+            .stdin(std::process::Stdio::null());
+
+        #[cfg(windows)]
+        cmd.creation_flags(0x08000000);
+
+        cmd.spawn().map_err(|e| {
             let mut s = state.lock().unwrap();
             s.operation_running = false;
             e.to_string()
-        })?;
+        })?
+    };
 
     let pid = child.id();
     {
@@ -1350,7 +1373,6 @@ fn read_plugin_script(plugin_id: String) -> Result<String, String> {
 }
 
 
-#[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
     let shared_state: SharedState = Arc::new(Mutex::new(AppState::default()));
     let sys_state: SysState = Arc::new(Mutex::new(System::new()));
