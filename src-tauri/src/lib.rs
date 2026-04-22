@@ -1159,19 +1159,48 @@ fn detect_game_dir() -> Result<String, String> {
 
 #[tauri::command]
 fn detect_game_data_dir() -> Result<String, String> {
+    const APP_ID: u32 = 2231450;
+
+    // Steam / Proton (Linux + aussi possible Windows Steam setup)
+    if let Ok(steam_dir) = steamlocate::SteamDir::locate() {
+        if let Ok(Some((_app, lib))) = steam_dir.find_app(APP_ID) {
+            let path = lib
+                .path()
+                .join("steamapps")
+                .join("compatdata")
+                .join(APP_ID.to_string())
+                .join("pfx")
+                .join("drive_c")
+                .join("users")
+                .join("steamuser")
+                .join("AppData")
+                .join("Roaming")
+                .join("PizzaTower_GM2");
+
+            return Ok(path.to_string_lossy().to_string());
+        }
+    }
+
     #[cfg(windows)]
     {
         if let Ok(appdata) = std::env::var("APPDATA") {
             let path = Path::new(&appdata).join("PizzaTower_GM2");
-            if path.exists() {
-                return Ok(path.to_string_lossy().to_string());
-            }
             return Ok(path.to_string_lossy().to_string());
         }
     }
-    Err("Could not find AppData".to_string())
-}
 
+    #[cfg(not(windows))]
+    {
+        if let Ok(home) = std::env::var("HOME") {
+            let path = Path::new(&home)
+                .join(".local/share/PizzaTower_GM2");
+
+            return Ok(path.to_string_lossy().to_string());
+        }
+    }
+
+    Err("Could not find game data directory".to_string())
+}
 #[tauri::command]
 fn get_mod_base_dir(mod_path: String) -> Result<String, String> {
     let path = Path::new(&mod_path);

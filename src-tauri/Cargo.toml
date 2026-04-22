@@ -1,6 +1,6 @@
 [package]
 name = "cheezy-launcher"
-version = "0.0.1"
+version = "0.0.2"
 description = "A Mod Launcher made for Pizza Tower"
 authors = ["Aness6040"]
 edition = "2021"
