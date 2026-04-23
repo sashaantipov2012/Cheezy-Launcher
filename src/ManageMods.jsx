@@ -18,7 +18,7 @@ function ModCard({
     const loadMod = async () => {
       try {
         const content = await invoke("read_item", {
-          path: `${modPath}/mod.json`,
+          path: joinPath(modPath, "mod.json"),
         });
         const data = JSON.parse(content);
         setModData(data);
@@ -437,7 +437,7 @@ function ManageMods({ modsDir, overwiteDir, addLog, logs, onDropInstall }) {
               <ModCard
                 key={mod}
                 modName={mod}
-                modPath={`${modsDir}/${mod}`}
+                modPath={joinPath(modsDir, mod)}
                 selected={mod === selectedMod}
                 onSelect={() => handleSelectMod(mod)}
                 setContextMenu={setContextMenu}
@@ -459,7 +459,7 @@ function ManageMods({ modsDir, overwiteDir, addLog, logs, onDropInstall }) {
             <a
               onClick={() => {
                 invoke("open_item", {
-                  path: contextMenu.modPath.replace(/\//g, "\\"),
+                  path: contextMenu.modPath
                 });
                 setContextMenu(null);
               }}

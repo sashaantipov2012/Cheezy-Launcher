@@ -475,7 +475,7 @@ function App() {
               onDropInstall={(p) =>
                 handleDropInstall(
                   p,
-                  modsDir.replace(/[/\\]mods$/, "\\mods_GML"),
+                  getGmlDir(modsDir),
                 )
               }
             />
