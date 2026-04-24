@@ -1,6 +1,7 @@
 import { useState, useEffect, useRef } from "react";
 import { invoke } from "@tauri-apps/api/core";
 import { listen } from "@tauri-apps/api/event";
+import { getCurrentWindow } from "@tauri-apps/api/window";
 import "./App.css";
 import AnsiToHtml from "ansi-to-html";
 import { onOpenUrl } from "@tauri-apps/plugin-deep-link";
@@ -243,6 +244,11 @@ function App() {
       .forEach((el) => el.remove());
     if (!theme) theme = "light";
     document.documentElement.setAttribute("data-theme", theme);
+    
+    try {
+      await getCurrentWindow().setTheme(theme === "dark" ? "dark" : "light");
+    } catch (e) {}
+
     try {
       const exeDir = await invoke("get_main_dir", { folderName: "" });
       let css = await invoke("read_item", {
