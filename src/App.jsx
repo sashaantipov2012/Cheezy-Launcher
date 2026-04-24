@@ -378,6 +378,14 @@ function App() {
         return;
 
       addLog(`Downloading ${file._sFile}...`);
+
+      setDownloadProgress({ 
+        file_name: file._sFile, 
+        percent: 0, 
+        downloaded_mb: 0, 
+        total_mb: 0 
+      });
+
       await invoke("download_and_install_mod", {
         url: file._sDownloadUrl,
         modName,
