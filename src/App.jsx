@@ -1,5 +1,6 @@
 import { useState, useEffect, useRef } from "react";
 import { invoke } from "@tauri-apps/api/core";
+import { listen } from "@tauri-apps/api/event";
 import "./App.css";
 import AnsiToHtml from "ansi-to-html";
 import { onOpenUrl } from "@tauri-apps/plugin-deep-link";
@@ -65,6 +66,7 @@ function App() {
   const [modsDir, setModsDir] = useState(null);
   const [overwiteDir, setOverwiteDir] = useState(null);
   const [logs, setLogs] = useState([]);
+  const [downloadProgress, setDownloadProgress] = useState(null);
   const [settings, setSettings] = useState({
     theme: "light",
     game_dir: "",
@@ -259,6 +261,15 @@ function App() {
   };
 
   useEffect(() => {
+    const unlisten = listen("download-progress", (event) => {
+      setDownloadProgress(JSON.parse(event.payload));
+    });
+    return () => {
+      unlisten.then((f) => f());
+    };
+  }, []);
+
+  useEffect(() => {
     invoke("get_main_dir", { folderName: "mods" })
       .then(setModsDir)
       .catch(console.error);
@@ -397,9 +408,11 @@ function App() {
         });
       }
 
+      setDownloadProgress(null);
       addLog(`✓ Installed: ${modName}`);
       window.alert(`"${modName}" installed successfully!`);
     } catch (e) {
+      setDownloadProgress(null);
       addLog(`Install error: ${e}`);
     }
   };
@@ -519,6 +532,15 @@ function App() {
           </div>
         )}
       </div>
+      {downloadProgress && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50">
+          <div className="bg-base-100 rounded-box shadow-xl p-5 w-96 flex flex-col gap-3 text-center">
+            <h3 className="font-bold text-sm truncate">Downloading {downloadProgress.file_name}</h3>
+            <progress className="progress progress-primary w-full" value={downloadProgress.percent} max="100"></progress>
+            <span className="text-xs font-mono">{downloadProgress.percent}% ({downloadProgress.downloaded_mb} MB / {downloadProgress.total_mb} MB)</span>
+          </div>
+        </div>
+      )}
     </div>
   );
 }
