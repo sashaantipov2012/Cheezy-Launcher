@@ -296,10 +296,12 @@ fn move_item(src_path: String, dest_path: String) -> Result<(), String> {
 
 #[tauri::command]
 fn open_item(path: String) -> Result<(), String> {
+    let clean_path = normalize_path(&path);
+    
     let result = match std::env::consts::OS {
-        "macos" => Command::new("open").arg(&path).spawn(),
-        "windows" => Command::new("explorer").arg(&path).spawn(),
-        "linux" => Command::new("xdg-open").arg(&path).spawn(),
+        "macos" => Command::new("open").arg(&clean_path).spawn(),
+        "windows" => Command::new("explorer").arg(&clean_path).spawn(),
+        "linux" => Command::new("xdg-open").arg(&clean_path).spawn(),
         _ => return Err("Unsupported OS".into()),
     };
     result.map(|_| ()).map_err(|e| e.to_string())
