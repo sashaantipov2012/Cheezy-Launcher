@@ -325,6 +325,8 @@ function App() {
       const CYOP_IDS = [25679, 22962, 25680];
       const GMLOADER_ID = 36921;
 
+      modName = sanitizeName(String(modName));
+
       const fileList = Array.isArray(files) ? files : Object.values(files);
       const file =
         fileList.find((f) => String(f._idRow) === String(fileId)) ??
@@ -359,11 +361,10 @@ function App() {
         return;
 
       addLog(`Downloading ${file._sFile}...`);
-      const bytes = await invoke("fetch_file", { url: file._sDownloadUrl });
-      await invoke("download_mod", {
+      await invoke("download_and_install_mod", {
+        url: file._sDownloadUrl,
         modName,
         modsPath: targetModsPath,
-        fileBytes: bytes,
         fileName: file._sFile,
       });
 

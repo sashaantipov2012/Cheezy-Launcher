@@ -1003,13 +1003,22 @@ fn force_stop_game(state: State<'_, SharedState>) -> Result<(), String> {
 }
 
 #[tauri::command]
-fn download_mod(
+async fn download_and_install_mod(
+    url: String,
     mod_name: String,
     mods_path: String,
-    file_bytes: Vec<u8>,
     file_name: String,
 ) -> Result<(), String> {
     use std::io::Cursor;
+
+    let client = reqwest::Client::builder()
+        .user_agent("Mozilla/5.0")
+        .redirect(reqwest::redirect::Policy::limited(10))
+        .build()
+        .map_err(|e| e.to_string())?;
+
+    let response = client.get(&url).send().await.map_err(|e| e.to_string())?;
+    let file_bytes = response.bytes().await.map_err(|e| e.to_string())?.to_vec();
 
     let mod_dir = Path::new(&mods_path).join(&mod_name);
     fs::create_dir_all(&mod_dir).map_err(|e| e.to_string())?;
@@ -1444,7 +1453,7 @@ pub fn run() {
             launch_game,
             is_operation_running,
             force_stop_game,
-            download_mod,
+            download_and_install_mod,
             install_local_mod,
             fetch_file,
             detect_game_dir,
