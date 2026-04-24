@@ -296,10 +296,12 @@ fn move_item(src_path: String, dest_path: String) -> Result<(), String> {
 
 #[tauri::command]
 fn open_item(path: String) -> Result<(), String> {
+    let clean_path = normalize_path(&path);
+    
     let result = match std::env::consts::OS {
-        "macos" => Command::new("open").arg(&path).spawn(),
-        "windows" => Command::new("explorer").arg(&path).spawn(),
-        "linux" => Command::new("xdg-open").arg(&path).spawn(),
+        "macos" => Command::new("open").arg(&clean_path).spawn(),
+        "windows" => Command::new("explorer").arg(&clean_path).spawn(),
+        "linux" => Command::new("xdg-open").arg(&clean_path).spawn(),
         _ => return Err("Unsupported OS".into()),
     };
     result.map(|_| ()).map_err(|e| e.to_string())
@@ -1003,18 +1005,43 @@ fn force_stop_game(state: State<'_, SharedState>) -> Result<(), String> {
 }
 
 #[tauri::command]
-fn download_mod(
+async fn download_and_install_mod(
+    url: String,
     mod_name: String,
     mods_path: String,
-    file_bytes: Vec<u8>,
     file_name: String,
+    app_handle: tauri::AppHandle,
 ) -> Result<(), String> {
     use std::io::Cursor;
 
+    let client = reqwest::Client::builder().user_agent("Mozilla/5.0").redirect(reqwest::redirect::Policy::limited(10)).build().map_err(|e| e.to_string())?;
+    let mut response = client.get(&url).send().await.map_err(|e| e.to_string())?;
+    let total_size = response.content_length().unwrap_or(0);
+    
+    let mut file_bytes = Vec::new();
+    let mut downloaded: u64 = 0;
+    let mut last_emit = 0;
+    let total_mb = total_size as f64 / 1_048_576.0;
+
+    while let Some(chunk) = response.chunk().await.map_err(|e| e.to_string())? {
+        file_bytes.extend_from_slice(&chunk);
+        downloaded += chunk.len() as u64;
+
+        if total_size > 0 {
+            let percent = (downloaded as f64 / total_size as f64 * 100.0) as u8;
+            if percent >= last_emit + 2 || percent == 100 {
+                last_emit = percent;
+                let downloaded_mb = downloaded as f64 / 1_048_576.0;
+                let payload = format!(r#"{{"file_name": "{}", "percent": {}, "downloaded_mb": {:.2}, "total_mb": {:.2}}}"#, file_name, percent, downloaded_mb, total_mb);
+                let _ = app_handle.emit("download-progress", payload);
+            }
+        }
+    }
+
     let mod_dir = Path::new(&mods_path).join(&mod_name);
     fs::create_dir_all(&mod_dir).map_err(|e| e.to_string())?;
-
     let archive_type = detect_archive_type(&file_bytes);
+
     if archive_type == "zip" {
         let cursor = Cursor::new(file_bytes);
         let mut archive = zip::ZipArchive::new(cursor).map_err(|e| e.to_string())?;
@@ -1444,7 +1471,7 @@ pub fn run() {
             launch_game,
             is_operation_running,
             force_stop_game,
-            download_mod,
+            download_and_install_mod,
             install_local_mod,
             fetch_file,
             detect_game_dir,

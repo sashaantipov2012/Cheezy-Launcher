@@ -12,6 +12,7 @@
     "dialog:allow-confirm",
     "dialog:allow-message",
     "deep-link:default",
-    "drpc:default"
+    "drpc:default",
+    "core:window:allow-set-theme"
   ]
 }

@@ -1,5 +1,7 @@
 import { useState, useEffect, useRef } from "react";
 import { invoke } from "@tauri-apps/api/core";
+import { listen } from "@tauri-apps/api/event";
+import { getCurrentWindow } from "@tauri-apps/api/window";
 import "./App.css";
 import AnsiToHtml from "ansi-to-html";
 import { onOpenUrl } from "@tauri-apps/plugin-deep-link";
@@ -65,6 +67,7 @@ function App() {
   const [modsDir, setModsDir] = useState(null);
   const [overwiteDir, setOverwiteDir] = useState(null);
   const [logs, setLogs] = useState([]);
+  const [downloadProgress, setDownloadProgress] = useState(null);
   const [settings, setSettings] = useState({
     theme: "light",
     game_dir: "",
@@ -241,6 +244,11 @@ function App() {
       .forEach((el) => el.remove());
     if (!theme) theme = "light";
     document.documentElement.setAttribute("data-theme", theme);
+    
+    try {
+      await getCurrentWindow().setTheme(theme === "dark" ? "dark" : "light");
+    } catch (e) {}
+
     try {
       const exeDir = await invoke("get_main_dir", { folderName: "" });
       let css = await invoke("read_item", {
@@ -257,6 +265,15 @@ function App() {
     const time = new Date().toLocaleTimeString();
     setLogs((prev) => [...prev, `[${time}] ${message}`]);
   };
+
+  useEffect(() => {
+    const unlisten = listen("download-progress", (event) => {
+      setDownloadProgress(JSON.parse(event.payload));
+    });
+    return () => {
+      unlisten.then((f) => f());
+    };
+  }, []);
 
   useEffect(() => {
     invoke("get_main_dir", { folderName: "mods" })
@@ -325,6 +342,8 @@ function App() {
       const CYOP_IDS = [25679, 22962, 25680];
       const GMLOADER_ID = 36921;
 
+      modName = sanitizeName(String(modName));
+
       const fileList = Array.isArray(files) ? files : Object.values(files);
       const file =
         fileList.find((f) => String(f._idRow) === String(fileId)) ??
@@ -359,11 +378,18 @@ function App() {
         return;
 
       addLog(`Downloading ${file._sFile}...`);
-      const bytes = await invoke("fetch_file", { url: file._sDownloadUrl });
-      await invoke("download_mod", {
+
+      setDownloadProgress({ 
+        file_name: file._sFile, 
+        percent: 0, 
+        downloaded_mb: 0, 
+        total_mb: 0 
+      });
+
+      await invoke("download_and_install_mod", {
+        url: file._sDownloadUrl,
         modName,
         modsPath: targetModsPath,
-        fileBytes: bytes,
         fileName: file._sFile,
       });
 
@@ -396,9 +422,11 @@ function App() {
         });
       }
 
+      setDownloadProgress(null);
       addLog(`✓ Installed: ${modName}`);
       window.alert(`"${modName}" installed successfully!`);
     } catch (e) {
+      setDownloadProgress(null);
       addLog(`Install error: ${e}`);
     }
   };
@@ -518,6 +546,15 @@ function App() {
           </div>
         )}
       </div>
+      {downloadProgress && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50">
+          <div className="bg-base-100 rounded-box shadow-xl p-5 w-96 flex flex-col gap-3 text-center">
+            <h3 className="font-bold text-sm truncate">Downloading {downloadProgress.file_name}</h3>
+            <progress className="progress progress-primary w-full" value={downloadProgress.percent} max="100"></progress>
+            <span className="text-xs font-mono">{downloadProgress.percent}% ({downloadProgress.downloaded_mb} MB / {downloadProgress.total_mb} MB)</span>
+          </div>
+        </div>
+      )}
     </div>
   );
 }
